@@ -24,13 +24,25 @@ A comprehensive Linux-based GUI application for Pomodoro technique activity trac
 - pip package manager
 - Linux desktop environment with GUI support
 
-### Quick Install
+### Basic Install
 ```bash
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
 # Install dependencies
 pip install -r requirements.txt
 
 # Run the application
 python src/main.py
+```
+
+### Desktop Integration
+
+#### Ubuntu/GNOME
+```bash
+# Add to application launcher sidebar
+cp pomodora.desktop ~/.local/share/applications/
 ```
 
 ### Google Drive Integration (Optional)
