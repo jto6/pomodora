@@ -1,0 +1,19 @@
+Write an elegant and beautiful pomodora sprint tracking app that runs on linux.
+
+It should track 25 minutes of effort with a 5 minute transition time afterwards.  At 25 minutes, it should sound an alarm to let me know to start the transition, and after the next 5 minutes, it should sound another (more noticable) alarm that the transition period is finished.  Ideally, the transition period alarm should not fire because I have started a new pomodora sprint by then, or stopped the tracking.
+
+Thus, There should be an easy way to terminate the current sprint (usually during the transition period) and start tracking another sprint.
+
+The activity during the completed sprint should be tracked with 2 fields, a project, and a freeform text field describing the task performed for the project.
+
+Once complete, the sprint activity should be recorded in a database.  There should be an easy way to edit the project list, and each project should also have a color assigned to it for easier reading.
+
+see the spreadsheet template, TemplatePOMTracker.xlsx, that tracks activity for a month.  It has 6 tabs, at least.  One for each week of month, and a summary tab for the whole month.  All of the current projects can be found in the month tab under the "Project" heading (A4-A16).  The data in the database should be able to generate such a spreadsheet.
+
+The database should be in a google drive and handle multiple readers/writers in a coherent and non-corrupting way, so that I can run this app from many workstations simultaneously.
+
+The app should present the activity data for the current day, week, or month.  It should have an excel export function that would create a populated version of the attached template.
+
+the app should also have a settings where I can change the length of the sprint and the transition period.
+
+The app should be able to minimize to show just the time elapsed so that it doesn't take up much screen space but is still visible as to how much time remains in the sprint.
