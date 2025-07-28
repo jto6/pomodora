@@ -80,7 +80,8 @@ class PomodoroTimer:
                 if self.pause_time > 0:
                     # Adjust start time to account for pause duration
                     pause_duration = time.time() - self.pause_time
-                    self.start_time = datetime.now() - timedelta(seconds=pause_duration)
+                    # Move start time forward by the pause duration to maintain remaining time
+                    self.start_time = self.start_time + timedelta(seconds=pause_duration)
                 
                 # Determine previous state based on current_time
                 if self.current_time <= self.break_duration:

@@ -1,117 +1,55 @@
 #!/usr/bin/env python3
 """
-Pomodora - Linux GUI Pomodoro Activity Tracker
+Pomodora - Modern Linux GUI Pomodoro Activity Tracker
 
-A comprehensive Pomodoro timer application with activity tracking,
-project management, and Excel export capabilities.
+A comprehensive Pomodoro timer application with modern PySide6 interface,
+activity tracking, project management, and Excel export capabilities.
 """
 
 import sys
 import os
-import tkinter as tk
-from tkinter import ttk
 import argparse
 from pathlib import Path
 
 # Add src directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from gui.main_window import MainWindow
+from utils.logging import set_verbose_level
+from gui.pyside_main_window import main
 
-def setup_styles():
-    """Setup ttk styles for better appearance"""
-    style = ttk.Style()
+def parse_args():
+    """Parse command-line arguments"""
+    parser = argparse.ArgumentParser(description="Pomodora - Linux GUI Pomodoro Activity Tracker")
     
-    # Use a modern theme if available
-    available_themes = style.theme_names()
-    preferred_themes = ['clam', 'alt', 'default']
+    # Support multiple verbose levels
+    verbose_group = parser.add_mutually_exclusive_group()
+    verbose_group.add_argument("-v", "--verbose", action="count", default=0,
+                             help="Increase verbosity (use -v, -vv, -vvv for levels 1-3)")
     
-    for theme in preferred_themes:
-        if theme in available_themes:
-            style.theme_use(theme)
-            break
-    
-    # Configure custom styles
-    style.configure('Accent.TButton', foreground='white', background='#3498db')
-    style.map('Accent.TButton', 
-              background=[('active', '#2980b9'), ('pressed', '#21618c')])
-
-def check_dependencies():
-    """Check if all required dependencies are available"""
-    missing = []
-    
-    try:
-        import pygame
-    except ImportError:
-        missing.append('pygame')
-    
-    try:
-        import sqlalchemy
-    except ImportError:
-        missing.append('sqlalchemy')
-    
-    try:
-        import openpyxl
-    except ImportError:
-        missing.append('openpyxl')
-    
-    if missing:
-        print("Missing required dependencies:")
-        for dep in missing:
-            print(f"  - {dep}")
-        print("\nInstall them with: pip install " + " ".join(missing))
-        return False
-    
-    return True
-
-def create_data_directory():
-    """Create data directory if it doesn't exist"""
-    data_dir = Path.home() / '.pomodora'
-    data_dir.mkdir(exist_ok=True)
-    return data_dir
-
-def main():
-    """Main application entry point"""
-    parser = argparse.ArgumentParser(description='Pomodora - Pomodoro Activity Tracker')
-    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
-    parser.add_argument('--data-dir', type=str, help='Custom data directory path')
-    args = parser.parse_args()
-    
-    # Check dependencies
-    if not check_dependencies():
-        sys.exit(1)
-    
-    # Setup data directory
-    if args.data_dir:
-        data_dir = Path(args.data_dir)
-        data_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        data_dir = create_data_directory()
-    
-    # Change to data directory for database files
-    os.chdir(data_dir)
-    
-    try:
-        # Create and run application
-        setup_styles()
-        app = MainWindow()
-        
-        if args.debug:
-            print(f"Starting Pomodora in debug mode")
-            print(f"Data directory: {data_dir}")
-        
-        # Run the application
-        app.run()
-        
-    except KeyboardInterrupt:
-        print("\nApplication interrupted by user")
-        sys.exit(0)
-    except Exception as e:
-        print(f"Fatal error: {e}")
-        if args.debug:
-            import traceback
-            traceback.print_exc()
-        sys.exit(1)
+    parser.add_argument("--no-audio", action="store_true",
+                       help="Disable audio alarms (silent mode)")
+    return parser.parse_args()
 
 if __name__ == "__main__":
+    args = parse_args()
+    
+    # Set global verbose level
+    set_verbose_level(args.verbose)
+    
+    # Set global audio disable flag
+    if args.no_audio:
+        import os
+        os.environ['POMODORA_NO_AUDIO'] = '1'
+    
+    # Show startup messages based on verbosity level
+    if args.verbose == 1:
+        print("Pomodora starting with info logging...")
+    elif args.verbose == 2:
+        print("Pomodora starting with debug logging...")
+    elif args.verbose >= 3:
+        print("Pomodora starting with trace logging...")
+    
+    if args.no_audio:
+        print("Pomodora starting in silent mode (no audio alarms)...")
+    
     main()

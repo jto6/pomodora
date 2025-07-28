@@ -11,9 +11,11 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 import io
+from utils.logging import verbose_print, error_print, info_print, debug_print
 
 # Required scopes for Google Drive access
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+# Using drive scope to access existing folders and files
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
 class GoogleDriveSync:
     def __init__(self, credentials_path: str = "credentials.json", token_path: str = "token.pickle"):
@@ -38,12 +40,12 @@ class GoogleDriveSync:
                 try:
                     creds.refresh(Request())
                 except Exception as e:
-                    print(f"Failed to refresh credentials: {e}")
+                    error_print(f"Failed to refresh credentials: {e}")
                     return False
             else:
                 if not os.path.exists(self.credentials_path):
-                    print(f"Google Drive credentials file not found: {self.credentials_path}")
-                    print("Please download credentials.json from Google Cloud Console")
+                    error_print(f"Google Drive credentials file not found: {self.credentials_path}")
+                    error_print("Please download credentials.json from Google Cloud Console")
                     return False
                 
                 try:
@@ -51,7 +53,7 @@ class GoogleDriveSync:
                         self.credentials_path, SCOPES)
                     creds = flow.run_local_server(port=0)
                 except Exception as e:
-                    print(f"Failed to authenticate: {e}")
+                    error_print(f"Failed to authenticate: {e}")
                     return False
             
             # Save credentials for next run
@@ -62,10 +64,10 @@ class GoogleDriveSync:
             self.service = build('drive', 'v3', credentials=creds)
             return True
         except Exception as e:
-            print(f"Failed to build Google Drive service: {e}")
+            error_print(f"Failed to build Google Drive service: {e}")
             return False
     
-    def setup_drive_folder(self, folder_name: str = "Pomodora Data") -> bool:
+    def setup_drive_folder(self, folder_name: str = "TimeTracking") -> bool:
         """Create or find the Pomodora data folder in Google Drive"""
         if not self.service:
             return False
@@ -74,33 +76,40 @@ class GoogleDriveSync:
             # Search for existing folder
             results = self.service.files().list(
                 q=f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-                fields="files(id, name)"
+                fields="files(id, name, parents)"
             ).execute()
             
             folders = results.get('files', [])
             
             if folders:
+                # If multiple folders exist, warn and use the first one
+                if len(folders) > 1:
+                    error_print(f"Warning: Found {len(folders)} folders named '{folder_name}'. Using the first one.")
+                    error_print("Consider removing duplicate folders from Google Drive.")
+                
                 self.folder_id = folders[0]['id']
-                print(f"Found existing folder: {folder_name}")
-            else:
-                # Create new folder
-                folder_metadata = {
-                    'name': folder_name,
-                    'mimeType': 'application/vnd.google-apps.folder'
-                }
-                
-                folder = self.service.files().create(
-                    body=folder_metadata,
-                    fields='id'
-                ).execute()
-                
-                self.folder_id = folder.get('id')
-                print(f"Created new folder: {folder_name}")
+                info_print(f"Found existing folder: {folder_name}")
+                return True
+            
+            # No folders found, create new one
+            folder_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': ['root']
+            }
+            
+            folder = self.service.files().create(
+                body=folder_metadata,
+                fields='id'
+            ).execute()
+            
+            self.folder_id = folder.get('id')
+            info_print(f"Created new folder: {folder_name}")
             
             return True
             
         except Exception as e:
-            print(f"Failed to setup drive folder: {e}")
+            error_print(f"Failed to setup drive folder: {e}")
             return False
     
     def upload_database(self, local_db_path: str) -> bool:
@@ -109,7 +118,7 @@ class GoogleDriveSync:
             return False
         
         if not os.path.exists(local_db_path):
-            print(f"Local database file not found: {local_db_path}")
+            error_print(f"Local database file not found: {local_db_path}")
             return False
         
         try:
@@ -139,7 +148,7 @@ class GoogleDriveSync:
                     media_body=media,
                     fields='id, modifiedTime'
                 ).execute()
-                print(f"Updated database in Google Drive")
+                info_print(f"Updated database in Google Drive")
             else:
                 # Create new file
                 uploaded_file = self.service.files().create(
@@ -148,12 +157,12 @@ class GoogleDriveSync:
                     fields='id, modifiedTime'
                 ).execute()
                 self.db_file_id = uploaded_file.get('id')
-                print(f"Uploaded new database to Google Drive")
+                info_print(f"Uploaded new database to Google Drive")
             
             return True
             
         except Exception as e:
-            print(f"Failed to upload database: {e}")
+            error_print(f"Failed to upload database: {e}")
             return False
     
     def download_database(self, local_db_path: str) -> bool:
@@ -173,7 +182,7 @@ class GoogleDriveSync:
             files = results.get('files', [])
             
             if not files:
-                print(f"Database file not found in Google Drive: {db_filename}")
+                error_print(f"Database file not found in Google Drive: {db_filename}")
                 return False
             
             self.db_file_id = files[0]['id']
@@ -191,11 +200,11 @@ class GoogleDriveSync:
             with open(local_db_path, 'wb') as f:
                 f.write(file_io.getvalue())
             
-            print(f"Downloaded database from Google Drive")
+            info_print(f"Downloaded database from Google Drive")
             return True
             
         except Exception as e:
-            print(f"Failed to download database: {e}")
+            error_print(f"Failed to download database: {e}")
             return False
     
     def sync_database(self, local_db_path: str) -> bool:
@@ -217,7 +226,7 @@ class GoogleDriveSync:
             remote_exists = len(files) > 0
             
             if not local_exists and not remote_exists:
-                print("No database file found locally or remotely")
+                info_print("No database file found locally or remotely")
                 return True  # Nothing to sync
             
             if local_exists and not remote_exists:
@@ -237,17 +246,17 @@ class GoogleDriveSync:
             local_modified = local_modified.replace(tzinfo=remote_modified.tzinfo)
             
             if remote_modified > local_modified:
-                print("Remote database is newer, downloading...")
+                info_print("Remote database is newer, downloading...")
                 return self.download_database(local_db_path)
             elif local_modified > remote_modified:
-                print("Local database is newer, uploading...")
+                info_print("Local database is newer, uploading...")
                 return self.upload_database(local_db_path)
             else:
-                print("Databases are in sync")
+                debug_print("Databases are in sync")
                 return True
             
         except Exception as e:
-            print(f"Failed to sync database: {e}")
+            error_print(f"Failed to sync database: {e}")
             return False
     
     def get_database_info(self, db_filename: str = "pomodora.db") -> Optional[Dict[str, Any]]:
@@ -275,7 +284,7 @@ class GoogleDriveSync:
             return None
             
         except Exception as e:
-            print(f"Failed to get database info: {e}")
+            error_print(f"Failed to get database info: {e}")
             return None
 
 class GoogleDriveManager:
@@ -286,6 +295,7 @@ class GoogleDriveManager:
         self.drive_sync = GoogleDriveSync()
         self.sync_interval = timedelta(minutes=5)  # Sync every 5 minutes
         self.last_sync = None
+        self.folder_name = "TimeTracking"  # Default folder name
         
     def initialize(self) -> bool:
         """Initialize Google Drive integration"""
@@ -293,14 +303,14 @@ class GoogleDriveManager:
             if not self.drive_sync.authenticate():
                 return False
             
-            if not self.drive_sync.setup_drive_folder():
+            if not self.drive_sync.setup_drive_folder(self.folder_name):
                 return False
             
             # Initial sync
             return self.sync_now()
             
         except Exception as e:
-            print(f"Failed to initialize Google Drive: {e}")
+            error_print(f"Failed to initialize Google Drive: {e}")
             return False
     
     def sync_now(self) -> bool:
@@ -311,7 +321,7 @@ class GoogleDriveManager:
                 self.last_sync = datetime.now()
             return result
         except Exception as e:
-            print(f"Sync failed: {e}")
+            error_print(f"Sync failed: {e}")
             return False
     
     def auto_sync(self) -> bool:

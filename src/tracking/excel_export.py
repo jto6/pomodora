@@ -127,15 +127,19 @@ class ExcelExporter:
             # Auto-adjust column widths
             for column in ws.columns:
                 max_length = 0
-                column_letter = column[0].column_letter
+                column_letter = None
                 for cell in column:
                     try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
+                        # Skip merged cells
+                        if hasattr(cell, 'column_letter'):
+                            column_letter = cell.column_letter
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
                     except:
                         pass
-                adjusted_width = min(max_length + 2, 50)
-                ws.column_dimensions[column_letter].width = adjusted_width
+                if column_letter:
+                    adjusted_width = min(max_length + 2, 50)
+                    ws.column_dimensions[column_letter].width = adjusted_width
         
         finally:
             session.close()
@@ -229,15 +233,19 @@ class ExcelExporter:
             # Auto-adjust column widths
             for column in ws.columns:
                 max_length = 0
-                column_letter = column[0].column_letter
+                column_letter = None
+                # Skip merged cells
+                if hasattr(column[0], 'column_letter'):
+                    column_letter = column[0].column_letter
                 for cell in column:
                     try:
                         if len(str(cell.value)) > max_length:
                             max_length = len(str(cell.value))
                     except:
                         pass
-                adjusted_width = min(max_length + 2, 60)
-                ws.column_dimensions[column_letter].width = adjusted_width
+                if column_letter:
+                    adjusted_width = min(max_length + 2, 60)
+                    ws.column_dimensions[column_letter].width = adjusted_width
         
         finally:
             session.close()
@@ -279,15 +287,19 @@ class ExcelExporter:
             # Auto-adjust column widths
             for column in ws.columns:
                 max_length = 0
-                column_letter = column[0].column_letter
+                column_letter = None
+                # Skip merged cells
+                if hasattr(column[0], 'column_letter'):
+                    column_letter = column[0].column_letter
                 for cell in column:
                     try:
                         if len(str(cell.value)) > max_length:
                             max_length = len(str(cell.value))
                     except:
                         pass
-                adjusted_width = min(max_length + 2, 60)
-                ws.column_dimensions[column_letter].width = adjusted_width
+                if column_letter:
+                    adjusted_width = min(max_length + 2, 60)
+                    ws.column_dimensions[column_letter].width = adjusted_width
         
         finally:
             session.close()
@@ -334,3 +346,195 @@ class ExcelExporter:
                 stats[date]['minutes'] += sprint.duration_minutes or 0
         
         return stats
+    
+    def export_all_data(self, filename: str):
+        """Export all data in a comprehensive workbook"""
+        wb = openpyxl.Workbook()
+        
+        # Remove default sheet
+        wb.remove(wb.active)
+        
+        session = self.db_manager.get_session()
+        try:
+            # Get all sprints
+            all_sprints = session.query(Sprint).order_by(Sprint.start_time).all()
+            
+            if not all_sprints:
+                # Create empty sheet if no data
+                ws = wb.create_sheet("No Data")
+                ws['A1'] = "No sprint data found"
+                wb.save(filename)
+                return
+            
+            # Create overview sheet
+            self.create_overview_sheet(wb, all_sprints)
+            
+            # Create all sprints sheet
+            self.create_all_sprints_sheet(wb, all_sprints)
+            
+            # Create project summary sheet
+            self.create_project_summary_sheet(wb, all_sprints)
+            
+            # Get date range for monthly sheets
+            first_sprint = min(all_sprints, key=lambda s: s.start_time)
+            last_sprint = max(all_sprints, key=lambda s: s.start_time)
+            
+            # Create monthly sheets for each month with data
+            current_date = first_sprint.start_time.replace(day=1)
+            end_date = last_sprint.start_time.replace(day=1)
+            
+            while current_date <= end_date:
+                # Check if this month has data
+                month_sprints = [s for s in all_sprints 
+                               if s.start_time.year == current_date.year and 
+                                  s.start_time.month == current_date.month]
+                
+                if month_sprints:
+                    self.create_month_summary_sheet(wb, current_date.year, current_date.month)
+                
+                # Move to next month
+                if current_date.month == 12:
+                    current_date = current_date.replace(year=current_date.year + 1, month=1)
+                else:
+                    current_date = current_date.replace(month=current_date.month + 1)
+        
+        finally:
+            session.close()
+        
+        wb.save(filename)
+    
+    def create_overview_sheet(self, wb: openpyxl.Workbook, all_sprints):
+        """Create overview summary sheet"""
+        ws = wb.create_sheet("Overview")
+        
+        # Title
+        ws['A1'] = "Pomodoro Activity Overview"
+        ws['A1'].font = Font(size=16, bold=True)
+        ws.merge_cells('A1:E1')
+        
+        row = 3
+        
+        # Total statistics
+        total_sprints = len(all_sprints)
+        completed_sprints = sum(1 for s in all_sprints if s.completed)
+        total_minutes = sum(s.duration_minutes or 0 for s in all_sprints)
+        
+        stats = [
+            ("Total Sprints", total_sprints),
+            ("Completed Sprints", completed_sprints),
+            ("Total Time (minutes)", total_minutes),
+            ("Total Time (hours)", f"{total_minutes / 60:.1f}"),
+            ("Completion Rate", f"{(completed_sprints / total_sprints * 100):.1f}%" if total_sprints > 0 else "0%")
+        ]
+        
+        for label, value in stats:
+            ws.cell(row=row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=row, column=2, value=value)
+            row += 1
+        
+        # Date range
+        row += 1
+        if all_sprints:
+            first_date = min(s.start_time for s in all_sprints).strftime('%Y-%m-%d')
+            last_date = max(s.start_time for s in all_sprints).strftime('%Y-%m-%d')
+            ws.cell(row=row, column=1, value="Date Range").font = Font(bold=True)
+            ws.cell(row=row, column=2, value=f"{first_date} to {last_date}")
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = None
+            for cell in column:
+                try:
+                    # Skip merged cells
+                    if hasattr(cell, 'column_letter'):
+                        column_letter = cell.column_letter
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                except:
+                    pass
+            if column_letter:
+                adjusted_width = min(max_length + 2, 30)
+                ws.column_dimensions[column_letter].width = adjusted_width
+    
+    def create_all_sprints_sheet(self, wb: openpyxl.Workbook, all_sprints):
+        """Create sheet with all sprint data"""
+        ws = wb.create_sheet("All Sprints")
+        
+        # Headers
+        headers = ['Date', 'Time', 'Project', 'Task Description', 'Duration (min)', 'Status']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color=self.colors['header'], end_color=self.colors['header'], fill_type='solid')
+        
+        # Data
+        for row, sprint in enumerate(all_sprints, 2):
+            ws.cell(row=row, column=1, value=sprint.start_time.strftime('%Y-%m-%d'))
+            ws.cell(row=row, column=2, value=sprint.start_time.strftime('%H:%M'))
+            ws.cell(row=row, column=3, value=sprint.project_name)
+            ws.cell(row=row, column=4, value=sprint.task_description)
+            ws.cell(row=row, column=5, value=sprint.duration_minutes or 0)
+            
+            status = "Completed" if sprint.completed else ("Interrupted" if sprint.interrupted else "In Progress")
+            ws.cell(row=row, column=6, value=status)
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 60)
+            ws.column_dimensions[column_letter].width = adjusted_width
+    
+    def create_project_summary_sheet(self, wb: openpyxl.Workbook, all_sprints):
+        """Create project summary sheet"""
+        ws = wb.create_sheet("Project Summary")
+        
+        # Title
+        ws['A1'] = "Project Summary"
+        ws['A1'].font = Font(size=14, bold=True)
+        
+        # Headers
+        row = 3
+        headers = ['Project', 'Total Sprints', 'Completed', 'Total Minutes', 'Avg Duration', 'Completion Rate']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=row, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color=self.colors['header'], end_color=self.colors['header'], fill_type='solid')
+        row += 1
+        
+        # Project data
+        project_stats = self.calculate_project_stats(all_sprints)
+        for project_name, stats in project_stats.items():
+            completion_rate = (stats['completed'] / stats['total'] * 100) if stats['total'] > 0 else 0
+            
+            ws.cell(row=row, column=1, value=project_name)
+            ws.cell(row=row, column=2, value=stats['total'])
+            ws.cell(row=row, column=3, value=stats['completed'])
+            ws.cell(row=row, column=4, value=stats['minutes'])
+            ws.cell(row=row, column=5, value=f"{stats['avg']:.1f}")
+            ws.cell(row=row, column=6, value=f"{completion_rate:.1f}%")
+            row += 1
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = None
+            for cell in column:
+                try:
+                    # Skip merged cells
+                    if hasattr(cell, 'column_letter'):
+                        column_letter = cell.column_letter
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                except:
+                    pass
+            if column_letter:
+                adjusted_width = min(max_length + 2, 30)
+                ws.column_dimensions[column_letter].width = adjusted_width

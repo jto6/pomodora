@@ -1,30 +1,42 @@
 # Pomodora - Linux GUI Pomodoro Activity Tracker
 
-A comprehensive Linux-based GUI application for Pomodoro technique activity tracking with multi-user database synchronization via Google Drive.
+A modern Linux-based GUI application for Pomodoro technique activity tracking with Google Drive synchronization and comprehensive audio alarm system.
 
 ## Features
 
-### Core Functionality
-- **Pomodoro Timer**: Customizable 25-minute work sprints with 5-minute breaks
-- **Audio Alarms**: Distinct sounds for sprint completion and break completion
-- **Activity Tracking**: Log project and task descriptions for each sprint
-- **Project Management**: Organize work by projects with color coding
-- **Compact Mode**: Minimize to show only timer for unobtrusive monitoring
+### Timer & Audio
+- **Automatic Timer Flow**: Sprint → Alarm → Break → Alarm → Auto-complete
+- **Customizable Durations**: Sprint (1-60 min), Break (1-30 min) 
+- **Rich Audio System**: Generated tones, system sounds, and custom sound files
+- **Dual Alarms**: Separate configurable sounds for sprint and break completion
+- **Volume Control**: Adjustable alarm volume with test buttons
 
-### Data Management
-- **Local SQLite Database**: Fast, reliable local storage
-- **Google Drive Sync**: Multi-user database synchronization across workstations
-- **Data Views**: View activity by day, week, or month
-- **Excel Export**: Generate detailed spreadsheets matching provided template format
+### Activity Management
+- **Hierarchical Organization**: Categories → Projects → Sprints data model
+- **Color-Coded Projects**: Visual organization with customizable colors
+- **Task Logging**: Detailed descriptions for each sprint session
+- **Activity Classifications**: Manage categories and projects with active/inactive states
+
+### Interface & Modes
+- **Modern GUI**: PySide6-based interface with dark/light themes
+- **Compact Mode**: Minimal timer view with click-anywhere-to-exit
+- **Auto-Compact Setting**: Automatically enter compact mode when sprint starts
+- **Responsive Design**: Properly sized dialogs and modern styling
+
+### Data Storage & Sync
+- **Local Settings**: Workstation-specific preferences in `~/.config/pomodora/`
+- **SQLite Database**: Fast, reliable sprint data storage with SQLAlchemy ORM
+- **Google Drive Sync**: Multi-workstation database sharing with configurable folder
+- **Smart Folder Detection**: Automatically finds existing Google Drive folders
 
 ## Installation
 
 ### Prerequisites
-- Python 3.8 or higher
-- pip package manager
-- Linux desktop environment with GUI support
+- **Python 3.8+** with pip package manager
+- **Linux desktop environment** with GUI support
+- **PySide6 dependencies** (usually installed automatically via pip)
 
-### Basic Install
+### Quick Start
 ```bash
 # Create and activate virtual environment
 python3 -m venv venv
@@ -35,72 +47,118 @@ pip install -r requirements.txt
 
 # Run the application
 python src/main.py
+
+# Run with different logging levels (for troubleshooting)
+python src/main.py -v          # Info: basic status messages
+python src/main.py -vv         # Debug: detailed debugging info  
+python src/main.py -vvv        # Trace: very detailed tracing
+
+# Run in silent mode (disable audio alarms)
+python src/main.py --no-audio
 ```
 
-### Desktop Integration
-
-#### Ubuntu/GNOME
+### Desktop Integration (Optional)
 ```bash
-# Add to application launcher sidebar
+# Create desktop shortcut (if pomodora.desktop exists)
 cp pomodora.desktop ~/.local/share/applications/
 ```
 
-### Google Drive Integration (Optional)
-To enable multi-user database synchronization:
+### Google Drive Sync Setup (Optional)
+For multi-workstation database synchronization:
 
-1. Create a Google Cloud Project
-2. Enable the Google Drive API
-3. Download credentials.json to the application data directory
-4. Enable Google Drive sync in settings
+1. **Create Google Cloud Project** at [console.cloud.google.com](https://console.cloud.google.com)
+2. **Enable Google Drive API** in the project
+3. **Create credentials** (Desktop Application type) and download as `credentials.json`
+4. **Place credentials file** in `~/.config/pomodora/`
+5. **Enable sync** in Settings → Database Storage → Google Drive
+6. **Configure folder** name (default: "TimeTracking")
 
 ## Usage
 
-### Basic Operation
-1. **Start a Sprint**: Select project, enter task description, click "Start Sprint"
-2. **During Sprint**: Timer counts down from 25 minutes (or custom duration)
-3. **Sprint Complete**: Alarm sounds, break timer begins automatically
-4. **Complete Sprint**: Click "Complete Sprint" to log the activity
-5. **Stop Early**: Click "Stop" to terminate current sprint
+### Basic Workflow
+1. **Select Project**: Choose from dropdown or create new via "Activity Classifications"
+2. **Enter Task**: Describe what you'll work on during this sprint
+3. **Start Sprint**: Click "Start Sprint" - timer begins countdown
+4. **Sprint Complete**: Alarm sounds automatically, break timer starts
+5. **Break Complete**: Second alarm sounds, sprint auto-completes and logs to database
+6. **Manual Actions**: Use "Stop" to terminate early or "Complete Sprint" to finish manually
 
-### Advanced Usage
-- **Compact Mode**: View → Toggle Compact Mode for minimal screen footprint
-- **Project Management**: Tools → Manage Projects to add/edit projects with colors
-- **Data Export**: File → View Data → Export to Excel for detailed reports
-- **Settings**: Tools → Settings to customize timer durations and audio
+### Audio Configuration
+- **Settings → Alarm Settings**: Configure volume and sound types
+- **Sprint/Break Alarms**: Choose different sounds for each event
+- **Sound Options**: Generated tones, system sounds, or browse custom files
+- **Test Buttons**: Preview any alarm sound before saving
+
+### Interface Modes
+- **Normal Mode**: Full interface with project selection and controls
+- **Compact Mode**: Minimal timer-only view (toggle via menu or auto-activate)
+- **Themes**: Switch between light and dark modes in Settings
+- **Auto-Compact**: Automatically enter compact mode when sprints start
+
+### Project Management
+- **Activity Classifications**: Hierarchical Categories → Projects system
+- **Color Coding**: Assign colors to projects for visual organization
+- **Active/Inactive**: Toggle project visibility without deleting data
+- **Default Projects**: Admin, Comm, Strategy, Research, SelfDev (configurable)
+
+## Configuration
+
+### Settings Location
+All configuration stored in `~/.config/pomodora/settings.json`:
+
+```json
+{
+  "theme_mode": "dark",
+  "sprint_duration": 25,
+  "break_duration": 5,
+  "alarm_volume": 0.7,
+  "sprint_alarm": "gentle_chime",
+  "break_alarm": "urgent_alert",
+  "auto_compact_mode": true,
+  "database_type": "google_drive",
+  "google_credentials_path": "~/.config/pomodora/credentials.json",
+  "google_drive_folder": "TimeTracking"
+}
+```
+
+### Database Schema
+- **Categories**: Top-level organization (Admin, Comm, Strategy, etc.)
+- **Projects**: Specific work areas within categories, with colors
+- **Sprints**: Individual timed work sessions with task descriptions
 
 ## Project Structure
 ```
 pomodora/
 ├── src/
-│   ├── main.py              # Application entry point
-│   ├── gui/                 # GUI components
-│   │   ├── main_window.py   # Main application window
-│   │   ├── project_manager.py # Project management dialog
-│   │   ├── settings_dialog.py # Settings configuration
-│   │   ├── data_viewer.py   # Data viewing and export
-│   │   └── alarm.py         # Audio alarm system
+│   ├── main.py                     # Application entry point
+│   ├── gui/
+│   │   └── pyside_main_window.py   # Complete PySide6 GUI implementation
 │   ├── timer/
-│   │   └── pomodoro.py      # Timer logic and state management
+│   │   └── pomodoro_timer.py       # Timer state machine and logic
+│   ├── audio/
+│   │   └── alarm.py                # Audio system (generated + file-based)
 │   └── tracking/
-│       ├── models.py        # Database models and management
-│       ├── excel_export.py  # Excel export functionality
-│       └── google_drive.py  # Google Drive synchronization
-├── tests/                   # Unit tests
-├── requirements.txt         # Python dependencies
-└── CLAUDE.md               # Development documentation
+│       ├── models.py               # SQLAlchemy database models
+│       ├── local_settings.py      # Local configuration management
+│       └── google_drive.py         # Google Drive API integration
+├── requirements.txt                # Python dependencies  
+├── CLAUDE.md                      # Development documentation
+└── README.md                      # User documentation
 ```
 
 ## Development
 
-### Running Tests
-```bash
-python -m pytest tests/
-```
+### Technology Stack
+- **PySide6**: Modern Qt6-based GUI framework
+- **SQLAlchemy**: Database ORM with SQLite backend
+- **Google Drive API v3**: Cloud synchronization
+- **pygame + numpy**: Audio generation and playback
 
 ### Commit Convention
-All commits follow the format: `<subsystem>: one-line summary`
+Format: `<subsystem>: one-line summary`
 
 Examples:
-- `timer: add customizable sprint duration`
-- `gui: implement compact view mode`
-- `tracking: add Google Drive synchronization`
+- `timer: add automatic break transition with dual alarms`
+- `gui: implement dark/light theme with modern styling`
+- `audio: add system sound browser with custom file support`
+- `tracking: add Google Drive sync with smart folder detection`
