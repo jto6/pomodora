@@ -379,26 +379,40 @@ class ModernPomodoroWindow(QMainWindow):
         debug_print(f"[{context.upper()}] Starting system theme detection...")
         try:
             import os
+            import platform
+            system = platform.system()
             
-            # Priority 1: Check GNOME/GTK settings (most reliable for Ubuntu)
-            try:
-                # Check color scheme preference (newer method)
-                result = os.popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null").read().strip()
-                debug_print(f"[{context.upper()}] GNOME color-scheme: {result}")
-                if result and 'prefer-dark' in result.lower():
-                    debug_print(f"[{context.upper()}] Dark theme detected via color-scheme: {result}")
-                    return True
+            # Priority 1: macOS dark mode detection
+            if system == 'Darwin':
+                try:
+                    result = os.popen("defaults read -g AppleInterfaceStyle 2>/dev/null").read().strip()
+                    debug_print(f"[{context.upper()}] macOS AppleInterfaceStyle: {result}")
+                    if result and result.lower() == 'dark':
+                        debug_print(f"[{context.upper()}] Dark theme detected via macOS system preference")
+                        return True
+                except Exception as e:
+                    debug_print(f"[{context.upper()}] macOS detection error: {e}")
+            
+            # Priority 2: Check GNOME/GTK settings (Linux)
+            elif system == 'Linux':
+                try:
+                    # Check color scheme preference (newer method)
+                    result = os.popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null").read().strip()
+                    debug_print(f"[{context.upper()}] GNOME color-scheme: {result}")
+                    if result and 'prefer-dark' in result.lower():
+                        debug_print(f"[{context.upper()}] Dark theme detected via color-scheme: {result}")
+                        return True
                     
-                # Check GTK theme name
-                result = os.popen("gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null").read().strip()
-                debug_print(f"[{context.upper()}] GTK theme: {result}")
-                if result and ('dark' in result.lower() or 'adwaita-dark' in result.lower()):
-                    debug_print(f"[{context.upper()}] Dark theme detected via GTK theme: {result}")
-                    return True
-            except Exception as e:
-                debug_print(f"[{context.upper()}] GNOME detection error: {e}")
+                    # Check GTK theme name
+                    result = os.popen("gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null").read().strip()
+                    debug_print(f"[{context.upper()}] GTK theme: {result}")
+                    if result and ('dark' in result.lower() or 'adwaita-dark' in result.lower()):
+                        debug_print(f"[{context.upper()}] Dark theme detected via GTK theme: {result}")
+                        return True
+                except Exception as e:
+                    debug_print(f"[{context.upper()}] GNOME detection error: {e}")
             
-            # Priority 2: Check KDE settings
+            # Priority 3: Check KDE settings (Linux)
             try:
                 kde_config = os.path.expanduser("~/.config/kdeglobals")
                 if os.path.exists(kde_config):
@@ -2803,8 +2817,17 @@ class ModernPomodoroWindow(QMainWindow):
         from PySide6.QtWidgets import QFileDialog
         import os
         
-        # Start in system sounds directory
-        start_dir = "/usr/share/sounds"
+        # Start in platform-specific system sounds directory
+        import platform
+        system = platform.system()
+        
+        if system == 'Darwin':  # macOS
+            start_dir = "/System/Library/Sounds"
+        elif system == 'Linux':  # Linux
+            start_dir = "/usr/share/sounds"
+        else:  # Windows and others
+            start_dir = os.path.expanduser("~")
+            
         if not os.path.exists(start_dir):
             start_dir = os.path.expanduser("~")
         
@@ -2812,7 +2835,7 @@ class ModernPomodoroWindow(QMainWindow):
             None,
             "Select Sound File",
             start_dir,
-            "Sound Files (*.wav *.ogg *.oga *.mp3);;All Files (*)"
+            "Sound Files (*.wav *.ogg *.oga *.mp3 *.aiff *.aif *.caf *.m4a);;All Files (*)"
         )
         
         if file_path:

@@ -1,6 +1,6 @@
-# Pomodora - Linux GUI Pomodoro Activity Tracker
+# Pomodora - Cross-Platform Pomodoro Activity Tracker
 
-A modern Linux-based GUI application for Pomodoro technique activity tracking with Google Drive synchronization and comprehensive audio alarm system.
+A modern cross-platform GUI application for Pomodoro technique activity tracking with Google Drive synchronization and comprehensive audio alarm system.
 
 ## Features
 
@@ -24,16 +24,24 @@ A modern Linux-based GUI application for Pomodoro technique activity tracking wi
 - **Responsive Design**: Properly sized dialogs and modern styling
 
 ### Data Storage & Sync
-- **Local Settings**: Workstation-specific preferences in `~/.config/pomodora/`
+- **Local Settings**: Platform-specific preferences storage
+  - Linux: `~/.config/pomodora/`
+  - macOS: `~/Library/Application Support/pomodora/`
+  - Windows: `~/AppData/Local/pomodora/`
 - **SQLite Database**: Fast, reliable sprint data storage with SQLAlchemy ORM
 - **Google Drive Sync**: Multi-workstation database sharing with configurable folder
 - **Smart Folder Detection**: Automatically finds existing Google Drive folders
+
+### Platform Support
+- **Linux**: Full support with GNOME/KDE theme detection and system sounds
+- **macOS**: Native dark mode detection and system sound integration
+- **Windows**: Basic functionality with fallback theme detection
 
 ## Installation
 
 ### Prerequisites
 - **Python 3.8+** with pip package manager
-- **Linux desktop environment** with GUI support
+- **Desktop environment** with GUI support (Linux, macOS, Windows)
 - **PySide6 dependencies** (usually installed automatically via pip)
 
 ### Quick Start

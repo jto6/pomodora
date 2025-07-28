@@ -11,10 +11,15 @@ from utils.logging import verbose_print, error_print, info_print, debug_print
 
 class LocalSettingsManager:
     def __init__(self):
-        # Use XDG config directory or fallback to home directory
-        if os.name == 'posix':  # Linux/Unix
+        # Use platform-specific config directories
+        import platform
+        system = platform.system()
+        
+        if system == 'Darwin':  # macOS
+            config_dir = Path.home() / 'Library' / 'Application Support' / 'pomodora'
+        elif system == 'Linux':  # Linux
             config_dir = Path.home() / '.config' / 'pomodora'
-        else:  # Windows
+        else:  # Windows and other systems
             config_dir = Path.home() / 'AppData' / 'Local' / 'pomodora'
         
         config_dir.mkdir(parents=True, exist_ok=True)

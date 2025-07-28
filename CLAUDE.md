@@ -1,6 +1,6 @@
-# Pomodora - Linux GUI Activity Tracker
+# Pomodora - Cross-Platform Activity Tracker
 
-A modern Linux-based GUI application for Pomodoro technique activity tracking with Google Drive synchronization.
+A modern cross-platform GUI application for Pomodoro technique activity tracking with Google Drive synchronization.
 
 ## Project Overview
 

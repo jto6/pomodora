@@ -4,6 +4,7 @@ Audio alarm functionality for Pomodoro timer
 import threading
 import time
 import math
+from pathlib import Path
 from utils.logging import verbose_print, error_print, info_print, debug_print
 
 try:
@@ -107,13 +108,30 @@ ALARM_SOUNDS = {
     }
 }
 
-# System sound directories to search
-SYSTEM_SOUND_DIRS = [
-    "/usr/share/sounds/gnome/default/alerts",
-    "/usr/share/sounds/freedesktop/stereo", 
-    "/usr/share/sounds/sound-icons",
-    "/usr/share/sounds"
-]
+# System sound directories to search (platform-specific)
+def get_system_sound_dirs():
+    """Get platform-specific system sound directories"""
+    import platform
+    system = platform.system()
+    
+    if system == 'Darwin':  # macOS
+        return [
+            "/System/Library/Sounds",
+            "/Library/Sounds",
+            str(Path.home() / "Library" / "Sounds"),
+            "/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds"
+        ]
+    elif system == 'Linux':  # Linux
+        return [
+            "/usr/share/sounds/gnome/default/alerts",
+            "/usr/share/sounds/freedesktop/stereo", 
+            "/usr/share/sounds/sound-icons",
+            "/usr/share/sounds"
+        ]
+    else:  # Windows and others
+        return [
+            "C:/Windows/Media"
+        ]
 
 def get_system_sounds():
     """Get list of system sound files"""
@@ -121,9 +139,10 @@ def get_system_sounds():
     import glob
     
     system_sounds = {}
-    sound_extensions = ['*.wav', '*.ogg', '*.oga', '*.mp3']
+    # Include more audio formats for cross-platform compatibility
+    sound_extensions = ['*.wav', '*.ogg', '*.oga', '*.mp3', '*.aiff', '*.aif', '*.caf', '*.m4a']
     
-    for sound_dir in SYSTEM_SOUND_DIRS:
+    for sound_dir in get_system_sound_dirs():
         if os.path.exists(sound_dir):
             for ext in sound_extensions:
                 pattern = os.path.join(sound_dir, '**', ext)
