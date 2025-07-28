@@ -49,6 +49,10 @@ python -m pytest tests/
 python -m py_compile src/main.py
 ```
 
+When Claude tries to run the app to debug itself, it should always use a local test database or create a temporary test version of the app that doesn't require credentials, so that
+- the production database isn't compromised
+- credentials are not required by Claude to access Google drive
+
 ## Project Structure
 
 ```
