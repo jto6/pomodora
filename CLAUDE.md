@@ -127,3 +127,5 @@ Examples:
 - `gui: implement dark/light theme switching`
 - `audio: add system sound file browser support`
 - `tracking: add Google Drive database synchronization`
+
+Only commit files that are part of the development.  Do not commit all files blindly or include files that were not part of the development effort that is being committed.
