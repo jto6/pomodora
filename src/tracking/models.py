@@ -372,7 +372,7 @@ class DatabaseManager:
                 Sprint.start_time == sprint.start_time
             ).first()
             if saved_sprint:
-                print(f"Verification: Sprint found in database with ID {saved_sprint.id}")
+                debug_print(f"Verification: Sprint found in database with ID {saved_sprint.id}")
             else:
                 error_print("Warning: Sprint not found after save!")
         finally:
