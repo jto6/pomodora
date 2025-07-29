@@ -154,10 +154,8 @@ def get_system_sounds():
                     if 'test' in os.path.basename(filepath).lower():
                         continue
                     
-                    # On macOS, test if the file can be played before adding it
-                    if platform.system() == 'Darwin' and not _test_sound_file(filepath):
-                        debug_print(f"Skipping incompatible sound file: {filepath}")
-                        continue
+                    # Skip files that are obviously incompatible (but don't test by playing them)
+                    # We'll test compatibility only when actually trying to play a sound
                         
                     filename = os.path.basename(filepath)
                     name_without_ext = os.path.splitext(filename)[0]
@@ -175,23 +173,6 @@ def get_system_sounds():
     
     return system_sounds
 
-def _test_sound_file(filepath):
-    """Test if a sound file can be played (for filtering)"""
-    import subprocess
-    import platform
-    
-    if platform.system() == 'Darwin':
-        try:
-            # Quick test with afplay
-            result = subprocess.run(['afplay', '-t', '0.1', filepath], 
-                                  capture_output=True, 
-                                  timeout=2)
-            return result.returncode == 0
-        except:
-            return False
-    
-    # For other platforms, assume it works (pygame will handle the error)
-    return True
 
 def get_available_alarms():
     """Get list of all available alarm sounds (generated + system)"""
