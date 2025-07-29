@@ -3003,6 +3003,13 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Modern style
     
+    # Set application properties for proper macOS menu bar display
+    app.setApplicationName("Pomodora")
+    app.setApplicationDisplayName("Pomodora")
+    app.setApplicationVersion("1.0")
+    app.setOrganizationName("Pomodora")
+    app.setOrganizationDomain("pomodora.app")
+    
     try:
         window = ModernPomodoroWindow()
         window.show()
