@@ -49,10 +49,6 @@ python -m pytest tests/
 python -m py_compile src/main.py
 ```
 
-When Claude tries to run the app to debug itself, it should always use a local test database or create a temporary test version of the app that doesn't require credentials, so that
-- the production database isn't compromised
-- credentials are not required by Claude to access Google drive
-
 ## Project Structure
 
 ```
@@ -144,6 +140,22 @@ The application is **production-ready** for deployment across multiple workstati
 - **Automatic Conflict Resolution**: Database merging handles simultaneous sprint completion
 - **Self-Healing**: System recovers from network failures and API errors
 - **Clean Logging**: Multi-level logging (`-v`, `-vv`, `-vvv`) for production troubleshooting
+
+## Coding Style
+
+Each source file should contain only 1 logically coherent component of the system.  Source files should be kept small, so that if any source file grows to a large size, it should then be refactored into logically independent and coherent components.  Ideally, all source files should be less that 1000 lines.  This allows:
+- Maintainability: Each component has a single responsibility
+- Reusability: Components can be used independently
+- Readability: Smaller, focused files are easier to understand
+- Testability: Individual components can be tested in isolation
+
+## Testing
+
+When Claude tries to run the app to debug itself, it should always use a local test database or create a temporary test version of the app that doesn't require credentials, so that
+- the production database isn't compromised
+- credentials are not required by Claude to access Google drive
+
+DO NOT try to run the app directly (eg, python src/main.py) without having a way to pass in options to use a local test database or otherwise avoid requiring Google API credentials.  If you create a test app that will interface with the database, it should access a local test database.
 
 ## Commit Convention
 
