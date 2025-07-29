@@ -359,12 +359,25 @@ class DatabaseManager:
     # Sprint management methods
     def add_sprint(self, sprint):
         """Add a new sprint to the database"""
-        session = self.get_session()
+        debug_print(f"add_sprint called with: {sprint.task_description}")
+        debug_print(f"Sprint details before save: project={sprint.project_name}, start={sprint.start_time}, end={sprint.end_time}")
+        
+        # Get session WITHOUT auto-sync to avoid overwriting local changes
+        session = self.Session()
         try:
+            debug_print("Adding sprint to session...")
             session.add(sprint)
+            
+            debug_print("Committing session...")
             session.commit()
-            debug_print(f"Sprint saved: {sprint.task_description} at {sprint.start_time}")
+            
+            debug_print(f"✓ Sprint saved: {sprint.task_description} at {sprint.start_time}")
+            debug_print(f"Sprint ID after commit: {sprint.id}")
             trace_print(f"Sprint details: ID={sprint.id}, Duration={sprint.duration_minutes}min, Project={sprint.project_name}")
+            
+            # Check total sprint count after save
+            total_sprints = session.query(Sprint).count()
+            debug_print(f"Total sprints in database after save: {total_sprints}")
             
             # Verify it was saved
             saved_sprint = session.query(Sprint).filter(
@@ -372,14 +385,308 @@ class DatabaseManager:
                 Sprint.start_time == sprint.start_time
             ).first()
             if saved_sprint:
-                debug_print(f"Verification: Sprint found in database with ID {saved_sprint.id}")
+                debug_print(f"✓ Verification: Sprint found in database with ID {saved_sprint.id}")
             else:
-                error_print("Warning: Sprint not found after save!")
+                error_print("❌ WARNING: Sprint not found after save!")
+                
+            # Also check by ID if available
+            if sprint.id:
+                by_id = session.query(Sprint).filter(Sprint.id == sprint.id).first()
+                if by_id:
+                    debug_print(f"✓ Verification by ID: Sprint {sprint.id} found")
+                else:
+                    error_print(f"❌ WARNING: Sprint with ID {sprint.id} not found!")
+                
+        except Exception as e:
+            error_print(f"❌ ERROR saving sprint: {e}")
+            session.rollback()
+            raise
         finally:
             session.close()
+            
+        # AFTER saving locally, sync using leader election
+        if self.google_drive_manager and self.google_drive_manager.is_enabled():
+            debug_print("Syncing sprint using leader election...")
+            if self._leader_election_sync():
+                debug_print("✓ Sprint synced to Google Drive")
+            else:
+                error_print("Failed to sync sprint to Google Drive")
+    
+    def _leader_election_sync(self) -> bool:
+        """Sync database using leader election to prevent race conditions"""
+        try:
+            # Use leader election to determine who gets to sync
+            if not self._acquire_database_sync_lock():
+                debug_print("Another workstation is syncing, our changes are already saved locally")
+                return True  # Our sprint is saved locally, sync will happen eventually
+            
+            try:
+                debug_print("Won leader election, performing database sync...")
+                
+                # Download current remote database to a temporary location
+                import tempfile
+                import shutil
+                
+                with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_file:
+                    remote_db_path = tmp_file.name
+                
+                # Backup our local database
+                local_backup_path = f"{self.db_path}.backup"
+                shutil.copy2(self.db_path, local_backup_path)
+                
+                try:
+                    # Download remote database
+                    self.google_drive_manager.drive_sync.sync_database(remote_db_path)
+                    
+                    # Merge our local sprints into the remote database
+                    merged_count = self._merge_local_into_remote(local_backup_path, remote_db_path)
+                    
+                    if merged_count >= 0:  # Success (even if 0 new sprints)
+                        # Replace our local database with the merged one
+                        shutil.copy2(remote_db_path, self.db_path)
+                        
+                        # Upload the merged database back to Google Drive
+                        if self.google_drive_manager.drive_sync.upload_database(self.db_path):
+                            debug_print(f"✓ Successfully synced {merged_count} new sprints to Google Drive")
+                            
+                            # Recreate engine/session after database replacement
+                            self.engine = create_engine(f'sqlite:///{self.db_path}')
+                            self.Session = sessionmaker(bind=self.engine)
+                            
+                            return True
+                        else:
+                            error_print("Failed to upload merged database")
+                            # Restore local database
+                            shutil.copy2(local_backup_path, self.db_path)
+                            return False
+                    else:
+                        error_print("Failed to merge local changes into remote database")
+                        return False
+                        
+                finally:
+                    # Cleanup temporary files
+                    try:
+                        os.unlink(remote_db_path)
+                        os.unlink(local_backup_path)
+                    except:
+                        pass
+                        
+            finally:
+                # Always release the sync lock
+                self._release_database_sync_lock()
+                
+        except Exception as e:
+            error_print(f"Leader election sync failed: {e}")
+            return False
+    
+    def _merge_local_into_remote(self, local_db_path: str, remote_db_path: str) -> int:
+        """Merge local sprints into remote database, return count of new sprints added"""
+        try:
+            # Connect to both databases
+            local_engine = create_engine(f'sqlite:///{local_db_path}')
+            remote_engine = create_engine(f'sqlite:///{remote_db_path}')
+            
+            # Ensure remote database has the proper schema
+            Base.metadata.create_all(remote_engine)
+            debug_print("Ensured remote database schema exists")
+            
+            LocalSession = sessionmaker(bind=local_engine)
+            RemoteSession = sessionmaker(bind=remote_engine)
+            
+            local_session = LocalSession()
+            remote_session = RemoteSession()
+            
+            try:
+                # Get all sprints from both databases
+                local_sprints = local_session.query(Sprint).all()
+                remote_sprints = remote_session.query(Sprint).all()
+                
+                debug_print(f"Local DB has {len(local_sprints)} sprints")
+                debug_print(f"Remote DB has {len(remote_sprints)} sprints")
+                
+                # Find sprints that exist in local but not in remote
+                remote_keys = {(s.project_name, s.task_description, s.start_time) for s in remote_sprints}
+                new_sprints = []
+                
+                for local_sprint in local_sprints:
+                    key = (local_sprint.project_name, local_sprint.task_description, local_sprint.start_time)
+                    if key not in remote_keys:
+                        new_sprints.append(local_sprint)
+                
+                debug_print(f"Found {len(new_sprints)} new sprints to merge")
+                
+                # Add new sprints to remote database
+                for sprint in new_sprints:
+                    new_remote_sprint = Sprint(
+                        project_name=sprint.project_name,
+                        task_description=sprint.task_description,
+                        start_time=sprint.start_time,
+                        end_time=sprint.end_time,
+                        completed=sprint.completed,
+                        interrupted=sprint.interrupted,
+                        duration_minutes=sprint.duration_minutes,
+                        planned_duration=sprint.planned_duration
+                    )
+                    remote_session.add(new_remote_sprint)
+                    debug_print(f"Added sprint: {sprint.task_description}")
+                
+                remote_session.commit()
+                debug_print(f"Successfully merged {len(new_sprints)} sprints into remote database")
+                
+                return len(new_sprints)
+                
+            finally:
+                local_session.close()
+                remote_session.close()
+                
+        except Exception as e:
+            error_print(f"Database merge failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return -1
+    
+    def _get_workstation_id(self) -> str:
+        """Get unique identifier for this workstation"""
+        import socket
+        import hashlib
+        hostname = socket.gethostname()
+        return hashlib.md5(hostname.encode()).hexdigest()[:8]
+    
+    def _acquire_database_sync_lock(self) -> bool:
+        """Acquire distributed lock for database sync using leader election algorithm"""
+        try:
+            import json
+            import tempfile
+            import time
+            import random
+            from datetime import timedelta
+            
+            workstation_id = self._get_workstation_id()
+            current_time = datetime.now()
+            
+            # Phase 1: All workstations register their intent to sync
+            intent_filename = f"sync_intent_{workstation_id}.json"
+            intent_data = {
+                'workstation_id': workstation_id,
+                'timestamp': current_time.isoformat(),
+                'random_priority': random.random()  # Tie-breaker
+            }
+            
+            # Upload our intent file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+                json.dump(intent_data, tmp_file, indent=2)
+                tmp_path = tmp_file.name
+            
+            success = self.google_drive_manager.drive_sync.upload_file(tmp_path, intent_filename)
+            os.unlink(tmp_path)
+            
+            if not success:
+                debug_print("Failed to register consolidation intent")
+                return False
+            
+            debug_print(f"Registered sync intent with priority {intent_data['random_priority']:.6f}")
+            
+            # Phase 2: Wait for other workstations to register (small random delay)
+            wait_time = random.uniform(2, 5)  # 2-5 seconds
+            debug_print(f"Waiting {wait_time:.1f}s for other workstations...")
+            time.sleep(wait_time)
+            
+            # Phase 3: Download all intent files and determine leader
+            intent_files = self.google_drive_manager.drive_sync.list_files_by_pattern("sync_intent_*.json")
+            
+            all_intents = []
+            for file_info in intent_files:
+                intent_data = self.google_drive_manager.drive_sync.download_json_file_by_id(file_info['id'])
+                if intent_data:
+                    intent_time = datetime.fromisoformat(intent_data['timestamp'])
+                    # Only consider recent intents (within last 30 seconds)
+                    if (current_time - intent_time).total_seconds() < 30:
+                        all_intents.append(intent_data)
+            
+            debug_print(f"Found {len(all_intents)} sync candidates")
+            
+            if not all_intents:
+                debug_print("No valid sync intents found")
+                self._cleanup_intent_file(intent_filename)
+                return False
+            
+            # Phase 4: Leader election - earliest timestamp wins, random priority as tie-breaker
+            leader = min(all_intents, key=lambda x: (x['timestamp'], -x['random_priority']))
+            
+            is_leader = leader['workstation_id'] == workstation_id
+            
+            debug_print(f"Leader election result: {leader['workstation_id']} (we are {'leader' if is_leader else 'follower'})")
+            
+            if is_leader:
+                # We are the leader - create the actual lock file
+                lock_data = {
+                    'workstation_id': workstation_id,
+                    'timestamp': current_time.isoformat(),
+                    'action': 'database_sync',
+                    'intent_timestamp': intent_data['timestamp']
+                }
+                
+                lock_filename = "database_sync_lock.json"
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+                    json.dump(lock_data, tmp_file, indent=2)
+                    tmp_path = tmp_file.name
+                
+                lock_success = self.google_drive_manager.drive_sync.upload_file(tmp_path, lock_filename)
+                os.unlink(tmp_path)
+                
+                if lock_success:
+                    debug_print("✓ Successfully acquired database sync lock as leader")
+                    # Clean up our intent file
+                    self._cleanup_intent_file(intent_filename)
+                    return True
+                else:
+                    error_print("Failed to create lock file despite being leader")
+                    self._cleanup_intent_file(intent_filename)
+                    return False
+            else:
+                # We are not the leader - clean up and exit
+                debug_print("Not selected as leader, backing off")
+                self._cleanup_intent_file(intent_filename)
+                return False
+                
+        except Exception as e:
+            error_print(f"Lock acquisition failed: {e}")
+            # Clean up on error
+            try:
+                self._cleanup_intent_file(f"sync_intent_{self._get_workstation_id()}.json")
+            except:
+                pass
+            return False
+    
+    def _cleanup_intent_file(self, intent_filename: str):
+        """Clean up our intent file"""
+        try:
+            self.google_drive_manager.drive_sync.delete_file_by_name(intent_filename)
+            debug_print(f"Cleaned up intent file: {intent_filename}")
+        except Exception as e:
+            debug_print(f"Failed to clean up intent file: {e}")
+            # Not critical - files will be ignored if too old
+    
+    def _release_database_sync_lock(self):
+        """Release distributed sync lock"""
+        try:
+            lock_filename = "database_sync_lock.json"
+            workstation_id = self._get_workstation_id()
+            
+            # Verify we own the lock before deleting
+            existing_lock = self.google_drive_manager.drive_sync.download_json_file(lock_filename)
+            if existing_lock and existing_lock.get('workstation_id') == workstation_id:
+                self.google_drive_manager.drive_sync.delete_file_by_name(lock_filename)
+                debug_print(f"✓ Released database sync lock for workstation {workstation_id}")
+            
+        except Exception as e:
+            error_print(f"Lock release failed: {e}")
+            # Not critical - lock will expire anyway
+    
     
     def get_sprints_by_date(self, date):
         """Get sprints for a specific date"""
+        # For read operations, use auto-sync to get latest data
         session = self.get_session()
         try:
             from datetime import datetime, timedelta

@@ -286,6 +286,154 @@ class GoogleDriveSync:
         except Exception as e:
             error_print(f"Failed to get database info: {e}")
             return None
+    
+    def upload_file(self, local_file_path: str, filename: str) -> bool:
+        """Upload a file to Google Drive folder"""
+        if not self.service or not self.folder_id:
+            return False
+        
+        try:
+            media = MediaFileUpload(local_file_path)
+            
+            # Check if file already exists
+            results = self.service.files().list(
+                q=f"name='{filename}' and parents in '{self.folder_id}' and trashed=false",
+                fields="files(id, name)"
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            if files:
+                # Update existing file
+                file_id = files[0]['id']
+                self.service.files().update(
+                    fileId=file_id,
+                    media_body=media
+                ).execute()
+                debug_print(f"Updated existing file: {filename}")
+            else:
+                # Create new file
+                file_metadata = {
+                    'name': filename,
+                    'parents': [self.folder_id]
+                }
+                self.service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id'
+                ).execute()
+                debug_print(f"Created new file: {filename}")
+            
+            return True
+            
+        except Exception as e:
+            error_print(f"Failed to upload file {filename}: {e}")
+            return False
+    
+    def delete_file_by_name(self, filename: str) -> bool:
+        """Delete a file by name from Google Drive folder"""
+        if not self.service or not self.folder_id:
+            return False
+        
+        try:
+            # Find the file
+            results = self.service.files().list(
+                q=f"name='{filename}' and parents in '{self.folder_id}' and trashed=false",
+                fields="files(id, name)"
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            if not files:
+                debug_print(f"File not found for deletion: {filename}")
+                return True  # File doesn't exist, consider it deleted
+            
+            # Delete the file
+            file_id = files[0]['id']
+            self.service.files().delete(fileId=file_id).execute()
+            debug_print(f"Deleted file: {filename}")
+            return True
+            
+        except Exception as e:
+            error_print(f"Failed to delete file {filename}: {e}")
+            return False
+    
+    def list_files_by_pattern(self, pattern: str) -> list:
+        """List files matching a pattern in Google Drive folder"""
+        if not self.service or not self.folder_id:
+            return []
+        
+        try:
+            # Convert shell pattern to Google Drive query
+            # For now, handle simple prefix matching
+            if pattern.endswith('*.json'):
+                prefix = pattern[:-6]  # Remove '*.json'
+                query = f"name contains '{prefix}' and name contains '.json' and parents in '{self.folder_id}' and trashed=false"
+            else:
+                query = f"name contains '{pattern}' and parents in '{self.folder_id}' and trashed=false"
+            
+            results = self.service.files().list(
+                q=query,
+                fields="files(id, name, modifiedTime)"
+            ).execute()
+            
+            files = results.get('files', [])
+            debug_print(f"Found {len(files)} files matching pattern: {pattern}")
+            return files
+            
+        except Exception as e:
+            error_print(f"Failed to list files with pattern {pattern}: {e}")
+            return []
+    
+    def download_json_file(self, filename: str) -> Optional[dict]:
+        """Download and parse JSON file from Google Drive"""
+        if not self.service or not self.folder_id:
+            return None
+        
+        try:
+            # Find the file
+            results = self.service.files().list(
+                q=f"name='{filename}' and parents in '{self.folder_id}' and trashed=false",
+                fields="files(id, name)"
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            if not files:
+                debug_print(f"JSON file not found: {filename}")
+                return None
+            
+            file_id = files[0]['id']
+            return self.download_json_file_by_id(file_id)
+            
+        except Exception as e:
+            error_print(f"Failed to download JSON file {filename}: {e}")
+            return None
+    
+    def download_json_file_by_id(self, file_id: str) -> Optional[dict]:
+        """Download and parse JSON file by ID from Google Drive"""
+        if not self.service:
+            return None
+        
+        try:
+            import json
+            
+            request = self.service.files().get_media(fileId=file_id)
+            downloaded = io.BytesIO()
+            downloader = MediaIoBaseDownload(downloaded, request)
+            
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+            
+            # Parse JSON
+            downloaded.seek(0)
+            content = downloaded.read().decode('utf-8')
+            return json.loads(content)
+            
+        except Exception as e:
+            error_print(f"Failed to download JSON file by ID {file_id}: {e}")
+            return None
 
 class GoogleDriveManager:
     """High-level manager for Google Drive database synchronization"""

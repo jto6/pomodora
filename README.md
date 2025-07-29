@@ -31,6 +31,8 @@ A modern cross-platform GUI application for Pomodoro technique activity tracking
 - **SQLite Database**: Fast, reliable sprint data storage with SQLAlchemy ORM
 - **Google Drive Sync**: Multi-workstation database sharing with configurable folder
 - **Smart Folder Detection**: Automatically finds existing Google Drive folders
+- **Leader Election Sync**: Race-condition-free multi-workstation synchronization
+- **Thread-Safe Operations**: Qt signal/slot mechanism prevents GUI threading issues
 
 ### Platform Support
 - **Linux**: Full support with GNOME/KDE theme detection and system sounds
@@ -157,9 +159,9 @@ pomodora/
 ## Development
 
 ### Technology Stack
-- **PySide6**: Modern Qt6-based GUI framework
+- **PySide6**: Modern Qt6-based GUI framework with thread-safe signal/slot architecture
 - **SQLAlchemy**: Database ORM with SQLite backend
-- **Google Drive API v3**: Cloud synchronization
+- **Google Drive API v3**: Cloud synchronization with distributed leader election
 - **pygame + numpy**: Audio generation and playback
 
 ### Commit Convention

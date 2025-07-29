@@ -94,6 +94,8 @@ pomodora/
 - **Local Settings**: JSON files in `~/.config/pomodora/` for workstation-specific preferences
 - **Shared Database**: SQLite database with Categories → Projects → Sprints hierarchy
 - **Google Drive Sync**: Multi-workstation database sharing with configurable folder location
+- **Leader Election Sync**: Distributed leader election algorithm prevents race conditions
+- **Thread-Safe Operations**: Qt signal/slot mechanism ensures GUI thread safety
 
 ### User Interface
 - **Themes**: Dark/Light mode with modern PySide6 styling
@@ -122,6 +124,27 @@ All settings stored in `~/.config/pomodora/settings.json`:
 - `google_credentials_path`: Path to Google Drive credentials file
 - `google_drive_folder`: Folder name in Google Drive for database storage
 
+## Multi-Workstation Deployment
+
+The application is **production-ready** for deployment across multiple workstations:
+
+### Leader Election Synchronization
+- **Race-Condition Free**: Distributed leader election algorithm ensures only one workstation syncs at a time
+- **4-Phase Process**: Intent registration → Coordination wait → Leader election → Atomic sync
+- **Fault Tolerant**: Failed syncs don't affect other workstations, automatic cleanup and retry
+- **Data Integrity**: All sprints from all workstations are preserved through proper database merging
+
+### Thread Safety
+- **Qt Signal/Slot Architecture**: Timer callbacks use Qt signals to prevent threading issues
+- **Main Thread GUI Updates**: All UI operations happen on the main thread via signal connections
+- **Background Timer Operations**: Timer logic runs in background threads without blocking UI
+
+### Deployment Benefits
+- **Local-First**: All functionality works offline, sync happens when available
+- **Automatic Conflict Resolution**: Database merging handles simultaneous sprint completion
+- **Self-Healing**: System recovers from network failures and API errors
+- **Clean Logging**: Multi-level logging (`-v`, `-vv`, `-vvv`) for production troubleshooting
+
 ## Commit Convention
 
 Format: `<subsystem>: one-line summary`
@@ -131,5 +154,6 @@ Examples:
 - `gui: implement dark/light theme switching`
 - `audio: add system sound file browser support`
 - `tracking: add Google Drive database synchronization`
+- `sync: implement leader election for multi-workstation deployment`
 
 Only commit files that are part of the development.  Do not commit all files blindly or include files that were not part of the development effort that is being committed.

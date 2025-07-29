@@ -13,6 +13,10 @@ from utils.logging import verbose_print, error_print, info_print, debug_print, t
 class ModernPomodoroWindow(QMainWindow):
     """Modern, colorful PySide6 Pomodoro timer with elegant design"""
     
+    # Qt signals for thread-safe timer callbacks
+    sprint_completed = Signal()
+    break_completed = Signal()
+    
     def __init__(self):
         super().__init__()
         # Initialize database manager with configurable location
@@ -63,9 +67,13 @@ class ModernPomodoroWindow(QMainWindow):
             error_print(f"Error checking existing sprints: {e}")
         self.pomodoro_timer = PomodoroTimer()
         
-        # Set up timer callbacks
-        self.pomodoro_timer.on_sprint_complete = self.on_sprint_complete
-        self.pomodoro_timer.on_break_complete = self.on_break_complete
+        # Set up timer callbacks using thread-safe signals
+        self.pomodoro_timer.on_sprint_complete = self.emit_sprint_complete
+        self.pomodoro_timer.on_break_complete = self.emit_break_complete
+        
+        # Connect signals to slot methods (these run on main thread)
+        self.sprint_completed.connect(self.handle_sprint_complete)
+        self.break_completed.connect(self.handle_break_complete)
         
         self.qt_timer = QTimer()
         self.qt_timer.timeout.connect(self.update_display)
@@ -1599,6 +1607,11 @@ class ModernPomodoroWindow(QMainWindow):
                 info_print(f"Created default project: {default_project.name}")
                 
             debug_print(f"Project combo has {self.project_combo.count()} items")
+            
+            # Set default selection to first project if available
+            if self.project_combo.count() > 0:
+                self.project_combo.setCurrentIndex(0)
+                debug_print(f"Set default project selection: {self.project_combo.currentText()} (ID: {self.project_combo.currentData()})")
         except Exception as e:
             error_print(f"Error loading projects: {e}")
             # Add fallback option
@@ -1612,12 +1625,9 @@ class ModernPomodoroWindow(QMainWindow):
         if self.pomodoro_timer.state == TimerState.STOPPED:
             # Start new sprint
             self.current_project_id = self.project_combo.currentData()
-            self.current_task_description = self.task_input.text().strip()
+            self.current_task_description = self.task_input.text().strip() or None
             
-            if not self.current_task_description:
-                self.current_task_description = "Pomodoro Sprint"
-                
-            debug_print(f"Starting sprint: {self.current_task_description}")
+            debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
             self.qt_timer.start(1000)  # Update every second
             self.start_button.setText("Pause")
@@ -1662,8 +1672,12 @@ class ModernPomodoroWindow(QMainWindow):
         self.qt_timer.stop()
         self.reset_ui()
     
-    def on_sprint_complete(self):
-        """Called when sprint timer reaches zero - play alarm and auto-start break"""
+    def emit_sprint_complete(self):
+        """Thread-safe method called from background timer thread"""
+        self.sprint_completed.emit()
+    
+    def handle_sprint_complete(self):
+        """Main thread handler for sprint completion"""
         info_print("Sprint completed - playing alarm and starting break")
         
         # Get alarm settings
@@ -1689,8 +1703,12 @@ class ModernPomodoroWindow(QMainWindow):
         # Update UI to show break state (this happens automatically in timer)
         # The timer already transitions to BREAK state automatically
     
-    def on_break_complete(self):
-        """Called when break timer reaches zero - play alarm and auto-complete sprint"""
+    def emit_break_complete(self):
+        """Thread-safe method called from background timer thread"""
+        self.break_completed.emit()
+    
+    def handle_break_complete(self):
+        """Main thread handler for break completion"""
         info_print("Break completed - playing alarm and auto-completing sprint")
         
         # Get alarm settings
@@ -1713,38 +1731,58 @@ class ModernPomodoroWindow(QMainWindow):
         thread = threading.Thread(target=play_alarm, daemon=True)
         thread.start()
         
-        # Auto-complete the sprint
+        # Auto-complete the sprint (now safe to call from main thread)
         self.complete_sprint()
         
     def complete_sprint(self):
         """Complete the current sprint"""
-        debug_print("Complete sprint button clicked!")
+        debug_print("Complete sprint called!")
+        debug_print(f"Current project_id: {self.current_project_id}")
+        debug_print(f"Current task_description: '{self.current_task_description}'")
+        debug_print(f"Timer state: {self.pomodoro_timer.get_state()}")
+        debug_print(f"Timer remaining: {self.pomodoro_timer.get_time_remaining()}")
+        
         try:
             # Save sprint to database
-            if self.current_project_id and self.current_task_description:
-                debug_print(f"Saving sprint: {self.current_task_description} for project {self.current_project_id}")
+            if self.current_project_id is not None:
+                debug_print(f"✓ Validation passed - saving sprint: {self.current_task_description} for project {self.current_project_id}")
+                
                 # Get project name from ID
                 project = self.db_manager.get_project_by_id(self.current_project_id)
                 project_name = project.name if project else "Unknown"
+                debug_print(f"Project name resolved: {project_name}")
                 
                 # Calculate actual start time based on timer duration
                 actual_duration = self.pomodoro_timer.sprint_duration - self.pomodoro_timer.get_time_remaining()
                 start_time = datetime.now() - timedelta(seconds=actual_duration)
+                debug_print(f"Calculated duration: {actual_duration}s, start_time: {start_time}")
+                
+                # Ensure task description is not None
+                task_desc = self.current_task_description or "Pomodoro Sprint"
                 
                 sprint = Sprint(
                     project_name=project_name,
-                    task_description=self.current_task_description,
+                    task_description=task_desc,
                     start_time=start_time,
                     end_time=datetime.now(),
                     completed=True,
                     duration_minutes=int(actual_duration / 60),
                     planned_duration=int(self.pomodoro_timer.sprint_duration / 60)
                 )
-                debug_print(f"Creating sprint: {sprint.task_description}, duration: {actual_duration}s")
+                debug_print(f"Created sprint object: {sprint.task_description}, duration: {actual_duration}s")
+                
+                # Save to database
+                debug_print("Calling db_manager.add_sprint()...")
                 self.db_manager.add_sprint(sprint)
-                info_print("Sprint saved to database")
+                info_print("✓ Sprint saved to database successfully")
+                
+                # Verify it was saved
+                from datetime import date
+                today_sprints = self.db_manager.get_sprints_by_date(date.today())
+                debug_print(f"Verification: {len(today_sprints)} sprints now in database for today")
+                
             else:
-                debug_print(f"Cannot save sprint - project_id: {self.current_project_id}, task: {self.current_task_description}")
+                error_print(f"❌ Cannot save sprint - no project selected (project_id: {self.current_project_id})")
             
             self.pomodoro_timer.stop()
             self.qt_timer.stop()
