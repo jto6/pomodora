@@ -36,7 +36,7 @@ A modern cross-platform GUI application for Pomodoro technique activity tracking
 
 ### Platform Support
 - **Linux**: Full support with GNOME/KDE theme detection and system sounds
-- **macOS**: Native dark mode detection and system sound integration
+- **macOS**: Native dark mode detection with afplay fallback for audio compatibility
 - **Windows**: Basic functionality with fallback theme detection
 
 ## Installation
@@ -98,6 +98,7 @@ For multi-workstation database synchronization:
 - **Sprint/Break Alarms**: Choose different sounds for each event
 - **Sound Options**: Generated tones, system sounds, or browse custom files
 - **Test Buttons**: Preview any alarm sound before saving
+- **Cross-Platform Audio**: Automatic fallback to native system audio on macOS
 
 ### Interface Modes
 - **Normal Mode**: Full interface with project selection and controls

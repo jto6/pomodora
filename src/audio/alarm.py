@@ -137,6 +137,7 @@ def get_system_sounds():
     """Get list of system sound files"""
     import os
     import glob
+    import platform
     
     system_sounds = {}
     # Include more audio formats for cross-platform compatibility
@@ -151,6 +152,11 @@ def get_system_sounds():
                     if os.path.getsize(filepath) > 1024 * 1024:  # Skip files > 1MB
                         continue
                     if 'test' in os.path.basename(filepath).lower():
+                        continue
+                    
+                    # On macOS, test if the file can be played before adding it
+                    if platform.system() == 'Darwin' and not _test_sound_file(filepath):
+                        debug_print(f"Skipping incompatible sound file: {filepath}")
                         continue
                         
                     filename = os.path.basename(filepath)
@@ -169,6 +175,24 @@ def get_system_sounds():
     
     return system_sounds
 
+def _test_sound_file(filepath):
+    """Test if a sound file can be played (for filtering)"""
+    import subprocess
+    import platform
+    
+    if platform.system() == 'Darwin':
+        try:
+            # Quick test with afplay
+            result = subprocess.run(['afplay', '-t', '0.1', filepath], 
+                                  capture_output=True, 
+                                  timeout=2)
+            return result.returncode == 0
+        except:
+            return False
+    
+    # For other platforms, assume it works (pygame will handle the error)
+    return True
+
 def get_available_alarms():
     """Get list of all available alarm sounds (generated + system)"""
     alarms = ALARM_SOUNDS.copy()
@@ -176,10 +200,9 @@ def get_available_alarms():
     return alarms
 
 def play_sound_file(filepath, volume=0.7):
-    """Play a sound file using pygame"""
+    """Play a sound file using pygame with macOS native fallback"""
     if not PYGAME_AVAILABLE:
-        error_print(f"Cannot play sound file: {filepath} (pygame not available)")
-        return
+        return _play_sound_native(filepath, volume)
     
     try:
         pygame.mixer.init()
@@ -195,10 +218,61 @@ def play_sound_file(filepath, volume=0.7):
         pygame.mixer.quit()
         
     except Exception as e:
-        error_print(f"Error playing sound file {filepath}: {e}")
-        # Fallback to system bell
-        debug_print("Using system bell fallback")
-        print("\a")
+        debug_print(f"Pygame failed to play {filepath}: {e}")
+        # Try native system audio on macOS
+        return _play_sound_native(filepath, volume)
+
+def _play_sound_native(filepath, volume=0.7):
+    """Play sound using native system audio (macOS fallback)"""
+    import platform
+    import subprocess
+    import os
+    
+    if platform.system() == 'Darwin':  # macOS
+        try:
+            # Use afplay command for native macOS audio playback
+            debug_print(f"Using macOS afplay for: {filepath}")
+            
+            # afplay doesn't support volume directly, but we can try
+            result = subprocess.run(['afplay', filepath], 
+                                  capture_output=True, 
+                                  text=True, 
+                                  timeout=10)
+            
+            if result.returncode == 0:
+                debug_print("✓ Sound played successfully with afplay")
+                return
+            else:
+                debug_print(f"afplay failed: {result.stderr}")
+        
+        except subprocess.TimeoutExpired:
+            debug_print("afplay timed out")
+        except FileNotFoundError:
+            debug_print("afplay command not found")
+        except Exception as e:
+            debug_print(f"afplay error: {e}")
+    
+    elif platform.system() == 'Linux':
+        # Try various Linux audio players
+        players = ['paplay', 'aplay', 'sox']
+        for player in players:
+            try:
+                result = subprocess.run([player, filepath], 
+                                      capture_output=True, 
+                                      text=True, 
+                                      timeout=10)
+                if result.returncode == 0:
+                    debug_print(f"✓ Sound played successfully with {player}")
+                    return
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                continue
+            except Exception as e:
+                debug_print(f"{player} error: {e}")
+                continue
+    
+    # Final fallback to system bell
+    debug_print("All audio methods failed, using system bell")
+    print("\a")
 
 def play_alarm_sound(sound_name="gentle_chime", volume=0.7):
     """Play a specific alarm sound by name"""
