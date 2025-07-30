@@ -119,7 +119,7 @@ class ActivityClassificationsDialog(QDialog):
             projects = self.db_manager.get_all_projects()
             debug_print(f"Found {len(projects)} projects")
             for project in projects:
-                debug_print(f"Project: {project.name}, Color: {project.color}, Active: {project.active}")
+                debug_print(f"Project: {project['name']}, Color: {project['color']}, Active: {project['active']}")
                 
                 # Create custom widget for each project with prominent color indicator
                 widget = QWidget()
@@ -129,12 +129,12 @@ class ActivityClassificationsDialog(QDialog):
                 # Color indicator (larger square)
                 color_label = QLabel()
                 color_label.setFixedSize(16, 16)
-                if project.active:
-                    color_label.setStyleSheet(f"background-color: {project.color}; border: 1px solid #333; border-radius: 2px;")
-                    text_label = QLabel(project.name)
+                if project['active']:
+                    color_label.setStyleSheet(f"background-color: {project['color']}; border: 1px solid #333; border-radius: 2px;")
+                    text_label = QLabel(project['name'])
                 else:
-                    color_label.setStyleSheet(f"background-color: {project.color}; border: 1px solid #333; border-radius: 2px; opacity: 0.5;")
-                    text_label = QLabel(f"{project.name} (inactive)")
+                    color_label.setStyleSheet(f"background-color: {project['color']}; border: 1px solid #333; border-radius: 2px; opacity: 0.5;")
+                    text_label = QLabel(f"{project['name']} (inactive)")
                     text_label.setStyleSheet("color: #888;")
                 
                 # Project name (normal text color) - fix clipping by removing height constraints
@@ -221,7 +221,7 @@ class ActivityClassificationsDialog(QDialog):
             reply = QMessageBox.question(
                 self, 
                 "Confirm Deletion", 
-                f"Are you sure you want to delete project '{project.name}'?\n\nThis action cannot be undone.",
+                f"Are you sure you want to delete project '{project['name']}'?\n\nThis action cannot be undone.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -249,7 +249,7 @@ class ActivityClassificationsDialog(QDialog):
             categories = self.db_manager.get_all_categories()
             debug_print(f"Found {len(categories)} categories")
             for category in categories:
-                debug_print(f"Category: {category.name}, Color: {category.color}, Active: {category.active}")
+                debug_print(f"Category: {category['name']}, Color: {category['color']}, Active: {category['active']}")
                 
                 # Create custom widget for each category with prominent color indicator
                 widget = QWidget()
@@ -259,12 +259,12 @@ class ActivityClassificationsDialog(QDialog):
                 # Color indicator (larger square)
                 color_label = QLabel()
                 color_label.setFixedSize(16, 16)
-                if category.active:
-                    color_label.setStyleSheet(f"background-color: {category.color}; border: 1px solid #333; border-radius: 2px;")
-                    text_label = QLabel(category.name)
+                if category['active']:
+                    color_label.setStyleSheet(f"background-color: {category['color']}; border: 1px solid #333; border-radius: 2px;")
+                    text_label = QLabel(category['name'])
                 else:
-                    color_label.setStyleSheet(f"background-color: {category.color}; border: 1px solid #333; border-radius: 2px; opacity: 0.5;")
-                    text_label = QLabel(f"{category.name} (inactive)")
+                    color_label.setStyleSheet(f"background-color: {category['color']}; border: 1px solid #333; border-radius: 2px; opacity: 0.5;")
+                    text_label = QLabel(f"{category['name']} (inactive)")
                     text_label.setStyleSheet("color: #888;")
                 
                 # Category name (normal text color) - fix clipping by removing height constraints
@@ -351,7 +351,7 @@ class ActivityClassificationsDialog(QDialog):
             reply = QMessageBox.question(
                 self, 
                 "Confirm Deletion", 
-                f"Are you sure you want to delete category '{category.name}' and all its projects?\n\nThis action cannot be undone.",
+                f"Are you sure you want to delete category '{category['name']}' and all its projects?\n\nThis action cannot be undone.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -533,7 +533,7 @@ class ActivityClassificationsDialog(QDialog):
         try:
             categories = self.db_manager.get_active_categories()
             for category in categories:
-                self.project_category_combo.addItem(category.name, category.id)
+                self.project_category_combo.addItem(category['name'], category['id'])
         except Exception as e:
             error_print(f"Error loading categories: {e}")
     

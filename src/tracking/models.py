@@ -268,7 +268,20 @@ class DatabaseManager:
         """Get all categories (active and inactive)"""
         session = self.get_session()
         try:
-            return session.query(Category).all()
+            categories_query = session.query(Category).all()
+            
+            # Convert to dictionaries to avoid session detachment issues
+            categories = []
+            for category in categories_query:
+                categories.append({
+                    'id': category.id,
+                    'name': category.name,
+                    'color': category.color,
+                    'active': category.active,
+                    'created_at': category.created_at
+                })
+            
+            return categories
         finally:
             session.close()
     
@@ -276,7 +289,20 @@ class DatabaseManager:
         """Get only active categories"""
         session = self.get_session()
         try:
-            return session.query(Category).filter(Category.active == True).all()
+            categories_query = session.query(Category).filter(Category.active == True).all()
+            
+            # Convert to dictionaries to avoid session detachment issues
+            categories = []
+            for category in categories_query:
+                categories.append({
+                    'id': category.id,
+                    'name': category.name,
+                    'color': category.color,
+                    'active': category.active,
+                    'created_at': category.created_at
+                })
+            
+            return categories
         finally:
             session.close()
     
@@ -377,7 +403,26 @@ class DatabaseManager:
         """Get all projects (active and inactive)"""
         session = self.get_session()
         try:
-            return session.query(Project).all()
+            # Join projects with categories to get complete information
+            results = session.query(Project, Category).join(
+                Category, Project.category_id == Category.id
+            ).all()
+            
+            # Convert to dictionaries to avoid session detachment issues
+            projects = []
+            for project, category in results:
+                projects.append({
+                    'id': project.id,
+                    'name': project.name,
+                    'color': project.color,
+                    'category_id': project.category_id,
+                    'category_name': category.name,
+                    'category_color': category.color,
+                    'active': project.active,
+                    'created_at': project.created_at
+                })
+            
+            return projects
         finally:
             session.close()
     
