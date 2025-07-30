@@ -58,6 +58,7 @@ class DatabaseManager:
         self.engine = create_engine(f'sqlite:///{self.db_path}')
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+        self.session = None  # Reusable session property
         
         # Google Drive integration
         self.google_drive_manager = None
@@ -134,29 +135,55 @@ class DatabaseManager:
         return {'enabled': False}
     
     def initialize_default_projects(self):
+        """Ensure default categories and projects exist in the database"""
         session = self.get_session()
         try:
-            # Check if projects already exist
-            if session.query(Project).count() == 0:
-                default_categories = [
-                    ("Admin", "#e74c3c"),      # Red
-                    ("Comm", "#3498db"),       # Blue  
-                    ("Strategy", "#9b59b6"),   # Purple
-                    ("Research", "#1abc9c"),   # Teal
-                    ("SelfDev", "#2ecc71"),    # Green
-                ]
+            default_categories = [
+                ("Admin", "#e74c3c"),      # Red
+                ("Comm", "#3498db"),       # Blue  
+                ("Strategy", "#9b59b6"),   # Purple
+                ("Research", "#1abc9c"),   # Teal
+                ("SelfDev", "#2ecc71"),    # Green
+            ]
+            
+            changes_made = False
+            
+            for name, color in default_categories:
+                # Check if category already exists
+                existing_category = session.query(Category).filter(Category.name == name).first()
                 
-                for name, color in default_categories:
-                    # Create category
+                if not existing_category:
+                    # Create missing category
+                    debug_print(f"Creating default category: {name}")
                     category = Category(name=name, color=color)
                     session.add(category)
                     session.flush()  # Get the category ID
-                    
-                    # Auto-create project with same name
+                    changes_made = True
+                else:
+                    category = existing_category
+                
+                # Check if corresponding project exists
+                existing_project = session.query(Project).filter(
+                    Project.name == name, 
+                    Project.category_id == category.id
+                ).first()
+                
+                if not existing_project:
+                    # Create missing project
+                    debug_print(f"Creating default project: {name}")
                     project = Project(name=name, category_id=category.id, color=color)
                     session.add(project)
-                
+                    changes_made = True
+            
+            if changes_made:
                 session.commit()
+                info_print("Default categories and projects created/restored")
+            else:
+                debug_print("All default categories and projects already exist")
+                
+        except Exception as e:
+            error_print(f"Error initializing default projects: {e}")
+            session.rollback()
         finally:
             session.close()
     
@@ -278,10 +305,32 @@ class DatabaseManager:
             session.close()
     
     def get_active_projects(self):
-        """Get only active projects"""
+        """Get only active projects with category information"""
         session = self.get_session()
         try:
-            return session.query(Project).filter(Project.active == True).all()
+            # Join projects with categories to get complete information
+            results = session.query(Project, Category).join(
+                Category, Project.category_id == Category.id
+            ).filter(
+                Project.active == True,
+                Category.active == True
+            ).all()
+            
+            # Convert to dictionaries to avoid session detachment issues
+            projects = []
+            for project, category in results:
+                projects.append({
+                    'id': project.id,
+                    'name': project.name,
+                    'color': project.color,
+                    'category_id': project.category_id,
+                    'category_name': category.name,
+                    'category_color': category.color,
+                    'active': project.active,
+                    'created_at': project.created_at
+                })
+            
+            return projects
         finally:
             session.close()
     
