@@ -68,25 +68,21 @@ class DatabaseManager:
         
         # Google Drive integration
         self.google_drive_manager = None
-        self._initialize_google_drive_async()
+        self._initialize_google_drive_sync()  # Changed to synchronous
         
         # Initialization complete
         self._initializing = False
     
-    def _initialize_google_drive_async(self):
-        """Initialize Google Drive integration asynchronously to prevent blocking"""
-        import threading
-        
-        def init_gdrive():
-            try:
-                self._initialize_google_drive()
-            except Exception as e:
-                error_print(f"Google Drive async initialization failed: {e}")
-        
-        # Start Google Drive initialization in background
-        gdrive_thread = threading.Thread(target=init_gdrive, daemon=True, name="GoogleDriveInit")
-        gdrive_thread.start()
-        debug_print("Google Drive initialization started in background")
+    def _initialize_google_drive_sync(self):
+        """Initialize Google Drive integration synchronously to ensure database is loaded before defaults"""
+        try:
+            self._initialize_google_drive()
+            # Clean up any orphaned lock files from previous sessions
+            if self.google_drive_manager and self.google_drive_manager.is_enabled():
+                self._cleanup_orphaned_locks()
+        except Exception as e:
+            error_print(f"Google Drive initialization failed: {e}")
+            # Continue without Google Drive if it fails
     
     def _initialize_google_drive(self):
         """Initialize Google Drive integration if enabled"""
@@ -138,7 +134,7 @@ class DatabaseManager:
                     debug_print("Starting background sync to Google Drive...")
                     start_time = time.time()
                     
-                    success = self.google_drive_manager.sync_now()
+                    success = self._leader_election_sync()
                     
                     elapsed = time.time() - start_time
                     if success:
@@ -166,7 +162,7 @@ class DatabaseManager:
         """Remove finished sync threads from tracking list"""
         self._background_sync_threads = [t for t in self._background_sync_threads if t.is_alive()]
     
-    def wait_for_pending_syncs(self, timeout=5.0):
+    def wait_for_pending_syncs(self, timeout=10.0):
         """Wait for pending background syncs to complete (with timeout)"""
         if not self._background_sync_threads:
             return True
@@ -194,7 +190,7 @@ class DatabaseManager:
     def sync_to_cloud(self) -> bool:
         """Manually trigger cloud sync"""
         if self.google_drive_manager and self.google_drive_manager.is_enabled():
-            return self.google_drive_manager.sync_now()
+            return self._leader_election_sync()
         return False
     
     def enable_google_drive_sync(self) -> bool:
@@ -690,25 +686,68 @@ class DatabaseManager:
             remote_session = RemoteSession()
             
             try:
-                # Get all sprints from both databases
+                # Get all data from both databases
+                local_categories = local_session.query(Category).all()
+                local_projects = local_session.query(Project).all()
                 local_sprints = local_session.query(Sprint).all()
+                
+                remote_categories = remote_session.query(Category).all()
+                remote_projects = remote_session.query(Project).all()
                 remote_sprints = remote_session.query(Sprint).all()
                 
-                debug_print(f"Local DB has {len(local_sprints)} sprints")
-                debug_print(f"Remote DB has {len(remote_sprints)} sprints")
+                debug_print(f"Local DB has {len(local_categories)} categories, {len(local_projects)} projects, {len(local_sprints)} sprints")
+                debug_print(f"Remote DB has {len(remote_categories)} categories, {len(remote_projects)} projects, {len(remote_sprints)} sprints")
                 
-                # Find sprints that exist in local but not in remote
-                remote_keys = {(s.project_name, s.task_description, s.start_time) for s in remote_sprints}
+                total_new_items = 0
+                
+                # Merge categories
+                remote_category_names = {c.name for c in remote_categories}
+                new_categories = []
+                for local_category in local_categories:
+                    if local_category.name not in remote_category_names:
+                        new_categories.append(local_category)
+                
+                debug_print(f"Found {len(new_categories)} new categories to merge")
+                for category in new_categories:
+                    new_remote_category = Category(
+                        name=category.name,
+                        color=category.color,
+                        active=category.active,
+                        created_at=category.created_at
+                    )
+                    remote_session.add(new_remote_category)
+                    debug_print(f"Added category: {category.name}")
+                total_new_items += len(new_categories)
+                
+                # Merge projects
+                remote_project_names = {p.name for p in remote_projects}
+                new_projects = []
+                for local_project in local_projects:
+                    if local_project.name not in remote_project_names:
+                        new_projects.append(local_project)
+                
+                debug_print(f"Found {len(new_projects)} new projects to merge")
+                for project in new_projects:
+                    new_remote_project = Project(
+                        name=project.name,
+                        category_id=project.category_id,
+                        color=project.color,
+                        active=project.active,
+                        created_at=project.created_at
+                    )
+                    remote_session.add(new_remote_project)
+                    debug_print(f"Added project: {project.name}")
+                total_new_items += len(new_projects)
+                
+                # Merge sprints
+                remote_sprint_keys = {(s.project_name, s.task_description, s.start_time) for s in remote_sprints}
                 new_sprints = []
-                
                 for local_sprint in local_sprints:
                     key = (local_sprint.project_name, local_sprint.task_description, local_sprint.start_time)
-                    if key not in remote_keys:
+                    if key not in remote_sprint_keys:
                         new_sprints.append(local_sprint)
                 
                 debug_print(f"Found {len(new_sprints)} new sprints to merge")
-                
-                # Add new sprints to remote database
                 for sprint in new_sprints:
                     new_remote_sprint = Sprint(
                         project_name=sprint.project_name,
@@ -722,11 +761,12 @@ class DatabaseManager:
                     )
                     remote_session.add(new_remote_sprint)
                     debug_print(f"Added sprint: {sprint.task_description}")
+                total_new_items += len(new_sprints)
                 
                 remote_session.commit()
-                debug_print(f"Successfully merged {len(new_sprints)} sprints into remote database")
+                debug_print(f"Successfully merged {len(new_categories)} categories, {len(new_projects)} projects, {len(new_sprints)} sprints into remote database")
                 
-                return len(new_sprints)
+                return total_new_items
                 
             finally:
                 local_session.close()
@@ -876,6 +916,42 @@ class DatabaseManager:
             error_print(f"Lock release failed: {e}")
             # Not critical - lock will expire anyway
     
+    def _cleanup_orphaned_locks(self):
+        """Clean up any orphaned lock files from previous app sessions"""
+        try:
+            from datetime import datetime, timedelta
+            
+            # Check for main database sync lock
+            lock_filename = "database_sync_lock.json"
+            existing_lock = self.google_drive_manager.drive_sync.download_json_file(lock_filename)
+            
+            if existing_lock:
+                lock_time = datetime.fromisoformat(existing_lock['timestamp'])
+                # If lock is older than 10 minutes, consider it orphaned
+                if (datetime.now() - lock_time).total_seconds() > 600:
+                    debug_print(f"Cleaning up orphaned sync lock from {lock_time}")
+                    self.google_drive_manager.drive_sync.delete_file_by_name(lock_filename)
+                else:
+                    debug_print(f"Found recent sync lock from {lock_time}, leaving it")
+            
+            # Clean up old intent files (older than 5 minutes)
+            intent_files = self.google_drive_manager.drive_sync.list_files_by_pattern("sync_intent_*.json")
+            current_time = datetime.now()
+            
+            for file_info in intent_files:
+                try:
+                    intent_data = self.google_drive_manager.drive_sync.download_json_file_by_id(file_info['id'])
+                    if intent_data:
+                        intent_time = datetime.fromisoformat(intent_data['timestamp'])
+                        if (current_time - intent_time).total_seconds() > 300:  # 5 minutes
+                            debug_print(f"Cleaning up old intent file: {file_info['name']}")
+                            self.google_drive_manager.drive_sync.delete_file_by_name(file_info['name'])
+                except Exception as e:
+                    debug_print(f"Error cleaning intent file {file_info['name']}: {e}")
+                    
+        except Exception as e:
+            debug_print(f"Error during lock cleanup: {e}")
+            # Not critical - continue startup
     
     def get_sprints_by_date(self, date):
         """Get sprints for a specific date"""

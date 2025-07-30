@@ -138,7 +138,7 @@ class ModernPomodoroWindow(QMainWindow):
                 # Wait for any pending background syncs to complete
                 if hasattr(self.db_manager, 'wait_for_pending_syncs'):
                     info_print("Waiting for pending database syncs...")
-                    self.db_manager.wait_for_pending_syncs(timeout=3.0)
+                    self.db_manager.wait_for_pending_syncs(timeout=10.0)
                 # Close any active sessions
                 info_print("Database cleanup completed")
             
