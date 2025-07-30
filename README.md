@@ -46,6 +46,39 @@ A modern cross-platform GUI application for Pomodoro technique activity tracking
 - **Desktop environment** with GUI support (Linux, macOS, Windows)
 - **PySide6 dependencies** (usually installed automatically via pip)
 
+#### Ubuntu/Debian System Dependencies
+For Ubuntu systems, install the required Qt and audio system packages:
+
+```bash
+# Essential Qt/PySide6 dependencies
+sudo apt update
+sudo apt install -y \
+    libxcb-cursor0 \
+    libxcb1 \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render0 \
+    libxcb-shape0 \
+    libxcb-util1 \
+    libxcb-xfixes0 \
+    libxcb-xinerama0 \
+    libxcb-xkb1 \
+    libxkbcommon-x11-0 \
+    libxkbcommon0 \
+    qt6-qpa-plugins \
+    libgl1-mesa-glx
+
+# Audio system dependencies (for alarm sounds)
+sudo apt install -y \
+    libasound2-dev \
+    portaudio19-dev \
+    libpulse-dev
+```
+
+**Note**: The `libxcb-cursor0` package is specifically required for Qt 6.5.0+ and will prevent "Qt platform plugin could not be initialized" errors.
+
 ### Quick Start
 ```bash
 # Create and activate virtual environment
