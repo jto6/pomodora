@@ -97,6 +97,19 @@ class DatabaseManager:
         
         return self.Session()
     
+    def _sync_after_commit(self):
+        """Trigger sync to Google Drive after database commits"""
+        if self.google_drive_manager and self.google_drive_manager.is_enabled():
+            try:
+                # Force immediate sync since data was changed
+                success = self.google_drive_manager.sync_now()
+                if success:
+                    info_print("Database changes synced to Google Drive")
+                else:
+                    error_print("Failed to sync database changes to Google Drive")
+            except Exception as e:
+                error_print(f"Error syncing to Google Drive: {e}")
+    
     def sync_to_cloud(self) -> bool:
         """Manually trigger cloud sync"""
         if self.google_drive_manager and self.google_drive_manager.is_enabled():
@@ -178,6 +191,9 @@ class DatabaseManager:
             if changes_made:
                 session.commit()
                 info_print("Default categories and projects created/restored")
+                
+                # Sync changes to Google Drive if enabled
+                self._sync_after_commit()
             else:
                 debug_print("All default categories and projects already exist")
                 
@@ -219,6 +235,9 @@ class DatabaseManager:
             project = Project(name=name, category_id=category.id, color=color)
             session.add(project)
             session.commit()
+            
+            # Sync changes to Google Drive if enabled
+            self._sync_after_commit()
             
             # Return the category ID instead of the object
             return category.id
@@ -341,6 +360,10 @@ class DatabaseManager:
             project = Project(name=name, category_id=category_id, color=color)
             session.add(project)
             session.commit()
+            
+            # Sync changes to Google Drive if enabled
+            self._sync_after_commit()
+            
             return project
         finally:
             session.close()
@@ -453,13 +476,8 @@ class DatabaseManager:
         finally:
             session.close()
             
-        # AFTER saving locally, sync using leader election
-        if self.google_drive_manager and self.google_drive_manager.is_enabled():
-            debug_print("Syncing sprint using leader election...")
-            if self._leader_election_sync():
-                debug_print("✓ Sprint synced to Google Drive")
-            else:
-                error_print("Failed to sync sprint to Google Drive")
+        # AFTER saving locally, sync to Google Drive
+        self._sync_after_commit()
     
     def _leader_election_sync(self) -> bool:
         """Sync database using leader election to prevent race conditions"""
