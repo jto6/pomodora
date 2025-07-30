@@ -60,6 +60,9 @@ class DatabaseManager:
         self.Session = sessionmaker(bind=self.engine)
         self.session = None  # Reusable session property
         
+        # Background sync tracking
+        self._background_sync_threads = []
+        
         # Google Drive integration
         self.google_drive_manager = None
         self._initialize_google_drive()
@@ -98,17 +101,72 @@ class DatabaseManager:
         return self.Session()
     
     def _sync_after_commit(self):
-        """Trigger sync to Google Drive after database commits"""
+        """Trigger non-blocking sync to Google Drive after database commits"""
         if self.google_drive_manager and self.google_drive_manager.is_enabled():
-            try:
-                # Force immediate sync since data was changed
-                success = self.google_drive_manager.sync_now()
-                if success:
-                    info_print("Database changes synced to Google Drive")
-                else:
-                    error_print("Failed to sync database changes to Google Drive")
-            except Exception as e:
-                error_print(f"Error syncing to Google Drive: {e}")
+            # Clean up finished threads first
+            self._cleanup_finished_sync_threads()
+            
+            # Start background sync to avoid blocking UI
+            import threading
+            import time
+            
+            def background_sync():
+                try:
+                    debug_print("Starting background sync to Google Drive...")
+                    start_time = time.time()
+                    
+                    success = self.google_drive_manager.sync_now()
+                    
+                    elapsed = time.time() - start_time
+                    if success:
+                        info_print(f"Database changes synced to Google Drive ({elapsed:.1f}s)")
+                    else:
+                        error_print(f"Failed to sync database changes to Google Drive ({elapsed:.1f}s)")
+                        
+                except Exception as e:
+                    elapsed = time.time() - start_time if 'start_time' in locals() else 0
+                    error_print(f"Error syncing to Google Drive ({elapsed:.1f}s): {e}")
+                finally:
+                    # Remove this thread from tracking list
+                    try:
+                        self._background_sync_threads.remove(threading.current_thread())
+                    except ValueError:
+                        pass  # Thread might have been cleaned up already
+            
+            # Run sync in background thread (daemon so it doesn't prevent app exit)
+            sync_thread = threading.Thread(target=background_sync, daemon=True, name="GoogleDriveSync")
+            self._background_sync_threads.append(sync_thread)
+            sync_thread.start()
+            debug_print(f"Background sync thread started (active threads: {len(self._background_sync_threads)})")
+    
+    def _cleanup_finished_sync_threads(self):
+        """Remove finished sync threads from tracking list"""
+        self._background_sync_threads = [t for t in self._background_sync_threads if t.is_alive()]
+    
+    def wait_for_pending_syncs(self, timeout=5.0):
+        """Wait for pending background syncs to complete (with timeout)"""
+        if not self._background_sync_threads:
+            return True
+            
+        info_print(f"Waiting for {len(self._background_sync_threads)} background sync(s) to complete...")
+        
+        import time
+        start_time = time.time()
+        
+        while self._background_sync_threads and (time.time() - start_time) < timeout:
+            # Clean up finished threads
+            self._cleanup_finished_sync_threads()
+            
+            if self._background_sync_threads:
+                time.sleep(0.1)  # Small delay before checking again
+        
+        remaining = len(self._background_sync_threads)
+        if remaining == 0:
+            info_print("All background syncs completed")
+            return True
+        else:
+            error_print(f"Timeout: {remaining} background sync(s) still running after {timeout}s")
+            return False
     
     def sync_to_cloud(self) -> bool:
         """Manually trigger cloud sync"""

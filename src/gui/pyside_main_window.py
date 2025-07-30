@@ -135,10 +135,10 @@ class ModernPomodoroWindow(QMainWindow):
             
             # Close database connections properly
             if hasattr(self, 'db_manager') and self.db_manager:
-                # Trigger final sync before closing
-                if hasattr(self.db_manager, '_sync_after_commit'):
-                    info_print("Triggering final database sync...")
-                    self.db_manager._sync_after_commit()
+                # Wait for any pending background syncs to complete
+                if hasattr(self.db_manager, 'wait_for_pending_syncs'):
+                    info_print("Waiting for pending database syncs...")
+                    self.db_manager.wait_for_pending_syncs(timeout=3.0)
                 # Close any active sessions
                 info_print("Database cleanup completed")
             
