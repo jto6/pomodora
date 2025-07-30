@@ -63,9 +63,30 @@ class DatabaseManager:
         # Background sync tracking
         self._background_sync_threads = []
         
+        # Flag to prevent sync during initialization
+        self._initializing = True
+        
         # Google Drive integration
         self.google_drive_manager = None
-        self._initialize_google_drive()
+        self._initialize_google_drive_async()
+        
+        # Initialization complete
+        self._initializing = False
+    
+    def _initialize_google_drive_async(self):
+        """Initialize Google Drive integration asynchronously to prevent blocking"""
+        import threading
+        
+        def init_gdrive():
+            try:
+                self._initialize_google_drive()
+            except Exception as e:
+                error_print(f"Google Drive async initialization failed: {e}")
+        
+        # Start Google Drive initialization in background
+        gdrive_thread = threading.Thread(target=init_gdrive, daemon=True, name="GoogleDriveInit")
+        gdrive_thread.start()
+        debug_print("Google Drive initialization started in background")
     
     def _initialize_google_drive(self):
         """Initialize Google Drive integration if enabled"""
@@ -94,8 +115,10 @@ class DatabaseManager:
             print(f"Google Drive integration not available: {e}")
     
     def get_session(self):
-        # Auto-sync before database operations if Google Drive is enabled
-        if self.google_drive_manager and self.google_drive_manager.is_enabled():
+        # Auto-sync before database operations if Google Drive is enabled (but not during initialization)
+        if (not self._initializing and 
+            self.google_drive_manager and 
+            self.google_drive_manager.is_enabled()):
             self.google_drive_manager.auto_sync()
         
         return self.Session()
