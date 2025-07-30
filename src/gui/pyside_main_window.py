@@ -389,8 +389,8 @@ class ModernPomodoroWindow(QMainWindow):
             debug_print(f"Found {len(projects)} active projects")
             
             for project in projects:
-                # Create display name with category
-                display_name = f"{project['category_name']} > {project['name']}"
+                # Use just the project name
+                display_name = project['name']
                 debug_print(f"Adding project: {display_name}")
                 trace_print(f"Project details: ID={project['id']}, Color={project['color']}, Active={project['active']}")
                 self.project_combo.addItem(display_name, project['id'])
@@ -402,7 +402,7 @@ class ModernPomodoroWindow(QMainWindow):
                 # Reload projects after initialization
                 projects = self.db_manager.get_active_projects()
                 for project in projects:
-                    display_name = f"{project['category_name']} > {project['name']}"
+                    display_name = project['name']
                     self.project_combo.addItem(display_name, project['id'])
                 
             debug_print(f"Project combo has {self.project_combo.count()} items")
