@@ -65,6 +65,7 @@ pomodora/
 │   └── tracking/
 │       ├── __init__.py
 │       ├── models.py               # SQLAlchemy database models
+│       ├── database_backup.py      # Database backup management system
 │       ├── local_settings.py      # Local configuration management
 │       └── google_drive.py         # Google Drive API integration
 ├── requirements.txt                # Python dependencies
@@ -92,6 +93,7 @@ pomodora/
 - **Google Drive Sync**: Multi-workstation database sharing with configurable folder location
 - **Leader Election Sync**: Distributed leader election algorithm prevents race conditions
 - **Thread-Safe Operations**: Qt signal/slot mechanism ensures GUI thread safety
+- **Automatic Backups**: Local backup system with daily/monthly/yearly retention policies
 
 ### User Interface
 - **Themes**: Dark/Light mode with modern PySide6 styling
@@ -119,6 +121,44 @@ All settings stored in `~/.config/pomodora/settings.json`:
 - `database_type`: "local" or "google_drive"
 - `google_credentials_path`: Path to Google Drive credentials file
 - `google_drive_folder`: Folder name in Google Drive for database storage
+
+## Database Backup System
+
+The application includes an automatic backup system that protects your data with configurable retention policies.
+
+### Backup Structure
+
+**Local Database Mode:**
+- Database: `/your/configured/path/pomodora.db`
+- Backups: `/your/configured/path/Backup/`
+
+**Google Drive Mode:**
+- Database: `~/.config/pomodora/cache/pomodora.db` (synced from Google Drive)
+- Backups: `~/.config/pomodora/google_drive_backups/Backup/`
+
+### Backup Types and Retention
+
+- **Daily Backups** (`Backup/Daily/`): Created automatically, keeps last 7 days
+- **Monthly Backups** (`Backup/Monthly/`): Created once per month, keeps last 12 months
+- **Yearly Backups** (`Backup/Yearly/`): Created once per year, kept indefinitely
+
+### Automatic Backup Triggers
+
+Backups are created automatically when:
+- Application starts (if needed based on date)
+- Default categories/projects are initialized
+- New categories or projects are created
+- Sprints are completed and saved
+
+### File Naming Convention
+
+- Daily: `pomodora_daily_YYYYMMDD_HHMMSS.db`
+- Monthly: `pomodora_monthly_YYYYMM.db`
+- Yearly: `pomodora_yearly_YYYY.db`
+
+### Backup Cleanup
+
+The system automatically removes old backups beyond the retention limits to prevent unlimited disk usage while maintaining comprehensive data protection.
 
 ## Multi-Workstation Deployment
 

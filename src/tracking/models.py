@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
 from utils.logging import verbose_print, error_print, info_print, debug_print, trace_print
+from .database_backup import DatabaseBackupManager
 
 Base = declarative_base()
 
@@ -63,6 +64,10 @@ class DatabaseManager:
         # Background sync tracking
         self._background_sync_threads = []
         
+        # Database backup manager - use actual storage location, not cache
+        backup_db_path, backup_base_dir = self._get_backup_storage_location()
+        self.backup_manager = DatabaseBackupManager(backup_db_path, backup_base_dir)
+        
         # Flag to prevent sync during initialization
         self._initializing = True
         
@@ -72,6 +77,64 @@ class DatabaseManager:
         
         # Initialization complete
         self._initializing = False
+        
+        # Perform initial backup after initialization
+        self._perform_backup_if_needed()
+    
+    def _get_backup_storage_location(self) -> tuple[str, str]:
+        """Get the actual storage location for backups (not cache)
+        
+        Returns:
+            Tuple of (db_path_for_backup, backup_base_directory)
+        """
+        try:
+            from .local_settings import get_local_settings
+            settings = get_local_settings()
+            db_type = settings.get('database_type', 'local')
+            
+            if db_type == 'local':
+                # For local storage, use the configured local path
+                local_path = settings.get('database_local_path', '')
+                if local_path:
+                    from pathlib import Path
+                    local_path = Path(local_path)
+                    if local_path.is_dir():
+                        # If it's a directory, add the database filename
+                        db_path = str(local_path / 'pomodora.db')
+                        backup_base = str(local_path)
+                    else:
+                        # It's already a full path to the database file
+                        db_path = str(local_path)
+                        backup_base = str(local_path.parent)
+                else:
+                    # Use default local path
+                    from pathlib import Path
+                    config_dir = Path.home() / '.config' / 'pomodora'
+                    db_dir = config_dir / 'database'
+                    db_path = str(db_dir / 'pomodora.db')
+                    backup_base = str(db_dir)
+                
+                info_print(f"Local backup location: {backup_base}/Backup/")
+                return db_path, backup_base
+            else:
+                # For Google Drive mode, backups go to a local directory
+                # but represent the Google Drive database
+                from pathlib import Path
+                config_dir = Path.home() / '.config' / 'pomodora'
+                backup_base = config_dir / 'google_drive_backups'
+                backup_base.mkdir(parents=True, exist_ok=True)
+                
+                # Use the cache database for creating backups, but store them 
+                # in the google_drive_backups directory
+                db_path = self.db_path  # The cache database
+                
+                info_print(f"Google Drive backup location: {backup_base}/Backup/")
+                return str(db_path), str(backup_base)
+                
+        except Exception as e:
+            error_print(f"Error determining backup location, using cache: {e}")
+            # Fallback to cache location
+            return self.db_path, str(Path(self.db_path).parent)
     
     def _initialize_google_drive_sync(self):
         """Initialize Google Drive integration synchronously to ensure database is loaded before defaults"""
@@ -271,6 +334,9 @@ class DatabaseManager:
                 
                 # Sync changes to Google Drive if enabled
                 self._sync_after_commit()
+                
+                # Create backup after adding defaults
+                self._perform_backup_if_needed()
             else:
                 debug_print("All default categories and projects already exist")
                 
@@ -341,6 +407,9 @@ class DatabaseManager:
             
             # Sync changes to Google Drive if enabled
             self._sync_after_commit()
+            
+            # Create backup after adding category
+            self._perform_backup_if_needed()
             
             # Return the category ID instead of the object
             return category.id
@@ -486,6 +555,9 @@ class DatabaseManager:
             # Sync changes to Google Drive if enabled
             self._sync_after_commit()
             
+            # Create backup after adding project
+            self._perform_backup_if_needed()
+            
             return project
         finally:
             session.close()
@@ -600,6 +672,9 @@ class DatabaseManager:
             
         # AFTER saving locally, sync to Google Drive
         self._sync_after_commit()
+        
+        # Create backup after adding sprint
+        self._perform_backup_if_needed()
     
     def _leader_election_sync(self) -> bool:
         """Sync database using leader election to prevent race conditions"""
@@ -952,6 +1027,28 @@ class DatabaseManager:
         except Exception as e:
             debug_print(f"Error during lock cleanup: {e}")
             # Not critical - continue startup
+    
+    def _perform_backup_if_needed(self):
+        """Perform database backup if needed (daily/monthly/yearly)"""
+        try:
+            if not self._initializing:
+                self.backup_manager.perform_scheduled_backups()
+        except Exception as e:
+            error_print(f"Error during backup: {e}")
+            # Don't let backup failures stop the app
+    
+    def get_backup_status(self) -> dict:
+        """Get database backup status"""
+        return self.backup_manager.get_backup_status()
+    
+    def create_manual_backup(self, backup_type: str = "daily") -> bool:
+        """Create a manual backup of the database"""
+        try:
+            backup_path = self.backup_manager.create_backup(backup_type)
+            return backup_path is not None
+        except Exception as e:
+            error_print(f"Error creating manual backup: {e}")
+            return False
     
     def get_sprints_by_date(self, date):
         """Get sprints for a specific date"""
