@@ -691,7 +691,8 @@ class DatabaseManager:
                 import tempfile
                 import shutil
                 
-                with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_file:
+                # Create temp file in system temp directory, not in Google Drive sync folder
+                with tempfile.NamedTemporaryFile(suffix='.db', delete=False, prefix='pomodora_sync_') as tmp_file:
                     remote_db_path = tmp_file.name
                 
                 # Backup our local database
@@ -699,8 +700,10 @@ class DatabaseManager:
                 shutil.copy2(self.db_path, local_backup_path)
                 
                 try:
-                    # Download remote database
-                    self.google_drive_manager.drive_sync.sync_database(remote_db_path)
+                    # Download remote database using the proper download method
+                    if not self.google_drive_manager.drive_sync.download_database(remote_db_path):
+                        error_print("Failed to download remote database for merge")
+                        return False
                     
                     # Merge our local sprints into the remote database
                     merged_count = self._merge_local_into_remote(local_backup_path, remote_db_path)
@@ -1023,10 +1026,55 @@ class DatabaseManager:
                             self.google_drive_manager.drive_sync.delete_file_by_name(file_info['name'])
                 except Exception as e:
                     debug_print(f"Error cleaning intent file {file_info['name']}: {e}")
+            
+            # Clean up orphaned temporary database files (tmp*.db)
+            self._cleanup_orphaned_temp_files()
                     
         except Exception as e:
             debug_print(f"Error during lock cleanup: {e}")
             # Not critical - continue startup
+    
+    def _cleanup_orphaned_temp_files(self):
+        """Clean up orphaned temporary database files from Google Drive"""
+        try:
+            # Look for files that match temporary file patterns
+            temp_patterns = ["tmp*.db", "pomodora_sync_*.db"]
+            
+            for pattern in temp_patterns:
+                # Use a more general search since Google Drive pattern matching is limited
+                if pattern.startswith("tmp"):
+                    # Search for files starting with "tmp" and ending with ".db"
+                    results = self.google_drive_manager.drive_sync.service.files().list(
+                        q=f"parents in '{self.google_drive_manager.drive_sync.folder_id}' and trashed=false and name contains 'tmp' and name contains '.db'",
+                        fields="files(id, name, modifiedTime)"
+                    ).execute()
+                elif pattern.startswith("pomodora_sync_"):
+                    # Search for sync temporary files
+                    results = self.google_drive_manager.drive_sync.service.files().list(
+                        q=f"parents in '{self.google_drive_manager.drive_sync.folder_id}' and trashed=false and name contains 'pomodora_sync_' and name contains '.db'",
+                        fields="files(id, name, modifiedTime)"
+                    ).execute()
+                else:
+                    continue
+                
+                files = results.get('files', [])
+                
+                for file_info in files:
+                    try:
+                        # Check if file is older than 1 hour (should be safe to delete)
+                        from datetime import datetime, timedelta
+                        modified_time = datetime.fromisoformat(file_info['modifiedTime'].replace('Z', '+00:00'))
+                        if (datetime.now(modified_time.tzinfo) - modified_time).total_seconds() > 3600:  # 1 hour
+                            debug_print(f"Cleaning up orphaned temp file: {file_info['name']}")
+                            self.google_drive_manager.drive_sync.service.files().delete(fileId=file_info['id']).execute()
+                        else:
+                            debug_print(f"Temporary file {file_info['name']} is recent, keeping it")
+                    except Exception as e:
+                        debug_print(f"Error cleaning temp file {file_info['name']}: {e}")
+                        
+        except Exception as e:
+            debug_print(f"Error during temp file cleanup: {e}")
+            # Not critical - continue
     
     def _perform_backup_if_needed(self):
         """Perform database backup if needed (daily/monthly/yearly)"""
