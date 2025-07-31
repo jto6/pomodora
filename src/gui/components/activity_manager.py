@@ -30,17 +30,17 @@ class ActivityClassificationsDialog(QDialog):
         """Initialize the activity classifications dialog UI"""
         main_layout = QVBoxLayout(self)
         
-        # Create tab widget for Categories and Projects
+        # Create tab widget for Task Categories and Projects
         tab_widget = QTabWidget()
         
-        # Categories Tab
-        categories_tab = QWidget()
-        categories_layout = QHBoxLayout(categories_tab)
+        # Task Categories Tab
+        task_categories_tab = QWidget()
+        task_categories_layout = QHBoxLayout(task_categories_tab)
         
-        # Categories - Left panel (list)
+        # Task Categories - Left panel (list)
         cat_left_widget = QWidget()
         cat_left_layout = QVBoxLayout(cat_left_widget)
-        cat_left_layout.addWidget(QLabel("Current Categories:"))
+        cat_left_layout.addWidget(QLabel("Current Task Categories:"))
         
         self.category_list = QListWidget()
         self.category_list.itemClicked.connect(self.on_category_selected)
@@ -61,13 +61,13 @@ class ActivityClassificationsDialog(QDialog):
         cat_actions.addWidget(cat_delete_button)
         cat_left_layout.addLayout(cat_actions)
         
-        categories_layout.addWidget(cat_left_widget)
+        task_categories_layout.addWidget(cat_left_widget)
         
-        # Categories - Right panel (add new)
-        cat_right_widget = self.create_add_category_panel()
-        categories_layout.addWidget(cat_right_widget)
+        # Task Categories - Right panel (add new)
+        cat_right_widget = self.create_add_task_category_panel()
+        task_categories_layout.addWidget(cat_right_widget)
         
-        tab_widget.addTab(categories_tab, "Categories")
+        tab_widget.addTab(task_categories_tab, "Task Categories")
         
         # Projects Tab
         projects_tab = QWidget()
@@ -99,7 +99,7 @@ class ActivityClassificationsDialog(QDialog):
         
         projects_layout.addWidget(proj_left_widget)
         
-        # Projects - Right panel (add new)
+        # Projects - Right panel (add new) - now independent of categories
         proj_right_widget = self.create_add_project_panel()
         projects_layout.addWidget(proj_right_widget)
         
@@ -243,15 +243,15 @@ class ActivityClassificationsDialog(QDialog):
     
     # Category management methods
     def refresh_category_list(self):
-        """Refresh the category list with visual color indicators"""
+        """Refresh the task category list with visual color indicators"""
         self.category_list.clear()
         try:
-            categories = self.db_manager.get_all_categories()
-            debug_print(f"Found {len(categories)} categories")
-            for category in categories:
-                debug_print(f"Category: {category['name']}, Color: {category['color']}, Active: {category['active']}")
+            task_categories = self.db_manager.get_all_task_categories()
+            debug_print(f"Found {len(task_categories)} task categories")
+            for task_category in task_categories:
+                debug_print(f"Task Category: {task_category['name']}, Color: {task_category['color']}, Active: {task_category['active']}")
                 
-                # Create custom widget for each category with prominent color indicator
+                # Create custom widget for each task category with prominent color indicator
                 widget = QWidget()
                 layout = QHBoxLayout(widget)
                 layout.setContentsMargins(5, 6, 5, 6)  # Increased vertical margins
@@ -259,15 +259,15 @@ class ActivityClassificationsDialog(QDialog):
                 # Color indicator (larger square)
                 color_label = QLabel()
                 color_label.setFixedSize(16, 16)
-                if category['active']:
-                    color_label.setStyleSheet(f"background-color: {category['color']}; border: 1px solid #333; border-radius: 2px;")
-                    text_label = QLabel(category['name'])
+                if task_category['active']:
+                    color_label.setStyleSheet(f"background-color: {task_category['color']}; border: 1px solid #333; border-radius: 2px;")
+                    text_label = QLabel(task_category['name'])
                 else:
-                    color_label.setStyleSheet(f"background-color: {category['color']}; border: 1px solid #333; border-radius: 2px; opacity: 0.5;")
-                    text_label = QLabel(f"{category['name']} (inactive)")
+                    color_label.setStyleSheet(f"background-color: {task_category['color']}; border: 1px solid #333; border-radius: 2px; opacity: 0.5;")
+                    text_label = QLabel(f"{task_category['name']} (inactive)")
                     text_label.setStyleSheet("color: #888;")
                 
-                # Category name (normal text color) - fix clipping by removing height constraints
+                # Task category name (normal text color) - fix clipping by removing height constraints
                 font = QFont()
                 font.setPointSize(10)  # Slightly larger point size
                 text_label.setFont(font)
@@ -290,7 +290,7 @@ class ActivityClassificationsDialog(QDialog):
                 
                 # Create list item and set custom widget
                 item = QListWidgetItem()
-                item.setData(Qt.UserRole, category)
+                item.setData(Qt.UserRole, task_category)
                 # Set explicit size hint to ensure enough vertical space
                 from PySide6.QtCore import QSize
                 item.setSizeHint(QSize(widget.sizeHint().width(), 32))
@@ -299,102 +299,101 @@ class ActivityClassificationsDialog(QDialog):
                 self.category_list.setItemWidget(item, widget)
                 
         except Exception as e:
-            error_print(f"Error loading categories: {e}")
+            error_print(f"Error loading task categories: {e}")
             import traceback
             traceback.print_exc()
     
     def on_category_selected(self, item):
-        """Handle category selection"""
-        category = item.data(Qt.UserRole)
-        if category:
-            self.selected_category = category
+        """Handle task category selection"""
+        task_category = item.data(Qt.UserRole)
+        if task_category:
+            self.selected_category = task_category
     
     def edit_selected_category(self):
-        """Edit the selected category"""
+        """Edit the selected task category"""
         if not hasattr(self, 'selected_category') or not self.selected_category:
-            QMessageBox.warning(self, "Error", "Please select a category to edit.")
+            QMessageBox.warning(self, "Error", "Please select a task category to edit.")
             return
         
-        # TODO: Implement category editing dialog
-        QMessageBox.information(self, "Info", "Category editing will be implemented in a future update.")
+        # TODO: Implement task category editing dialog
+        QMessageBox.information(self, "Info", "Task category editing will be implemented in a future update.")
     
     def toggle_category_active(self):
-        """Toggle active status of selected category"""
+        """Toggle active status of selected task category"""
         if not hasattr(self, 'selected_category') or not self.selected_category:
-            QMessageBox.warning(self, "Error", "Please select a category to toggle.")
+            QMessageBox.warning(self, "Error", "Please select a task category to toggle.")
             return
         
         try:
-            category = self.selected_category
-            new_status = self.db_manager.toggle_category_active(category.id)
+            task_category = self.selected_category
+            new_status = self.db_manager.toggle_task_category_active(task_category['id'])
             
             if new_status is not None:
-                self.refresh_category_list()  # Refresh the category display
+                self.refresh_category_list()  # Refresh the task category display
                 if self.parent_window:
-                    self.parent_window.load_projects()  # Refresh the main window dropdown
+                    self.parent_window.load_task_categories()  # Refresh the main window dropdown
             else:
-                QMessageBox.warning(self, "Error", "Failed to toggle category status.")
+                QMessageBox.warning(self, "Error", "Failed to toggle task category status.")
                 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to toggle category: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to toggle task category: {str(e)}")
     
     def delete_selected_category(self):
-        """Delete the selected category"""
+        """Delete the selected task category"""
         if not hasattr(self, 'selected_category') or not self.selected_category:
-            QMessageBox.warning(self, "Error", "Please select a category to delete.")
+            QMessageBox.warning(self, "Error", "Please select a task category to delete.")
             return
         
         try:
-            category = self.selected_category
+            task_category = self.selected_category
             
             # Confirm deletion
             reply = QMessageBox.question(
                 self, 
                 "Confirm Deletion", 
-                f"Are you sure you want to delete category '{category['name']}' and all its projects?\n\nThis action cannot be undone.",
+                f"Are you sure you want to delete task category '{task_category['name']}'?\n\nThis action cannot be undone.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
             
             if reply == QMessageBox.StandardButton.Yes:
-                success, message = self.db_manager.delete_category(category.id)
+                success, message = self.db_manager.delete_task_category(task_category['id'])
                 
                 if success:
-                    self.refresh_category_list()  # Refresh the category display
-                    self.refresh_project_list()  # Refresh the project display
+                    self.refresh_category_list()  # Refresh the task category display
                     if self.parent_window:
-                        self.parent_window.load_projects()  # Refresh the main window dropdown
-                    # Clear selection since category is deleted
+                        self.parent_window.load_task_categories()  # Refresh the main window dropdown
+                    # Clear selection since task category is deleted
                     self.selected_category = None
                 else:
                     QMessageBox.warning(self, "Cannot Delete", message)
                     
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to delete category: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to delete task category: {str(e)}")
     
-    def create_add_category_panel(self):
-        """Create the add category panel"""
+    def create_add_task_category_panel(self):
+        """Create the add task category panel"""
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         
-        # Add new category section
-        add_group = QGroupBox("Add New Category")
+        # Add new task category section
+        add_group = QGroupBox("Add New Task Category")
         add_layout = QVBoxLayout(add_group)
         
-        # Category name
+        # Task category name
         name_layout = QHBoxLayout()
         name_layout.addWidget(QLabel("Name:"))
-        self.new_category_input = QLineEdit()
-        name_layout.addWidget(self.new_category_input)
+        self.new_task_category_input = QLineEdit()
+        name_layout.addWidget(self.new_task_category_input)
         add_layout.addLayout(name_layout)
         
         # Color selection (reuse the color palette)
-        color_section = self.create_color_selector("category")
+        color_section = self.create_color_selector("task_category")
         add_layout.addWidget(color_section)
         
         # Add button
-        add_button = QPushButton("Add Category")
-        add_button.clicked.connect(self.add_new_category)
+        add_button = QPushButton("Add Task Category")
+        add_button.clicked.connect(self.add_new_task_category)
         add_layout.addWidget(add_button)
         
         right_layout.addWidget(add_group)
@@ -418,13 +417,7 @@ class ActivityClassificationsDialog(QDialog):
         name_layout.addWidget(self.new_project_input)
         add_layout.addLayout(name_layout)
         
-        # Category selection
-        category_layout = QHBoxLayout()
-        category_layout.addWidget(QLabel("Category:"))
-        self.project_category_combo = QComboBox()
-        self.load_categories_for_project()
-        category_layout.addWidget(self.project_category_combo)
-        add_layout.addLayout(category_layout)
+        # Projects are now independent of categories - no category selection needed
         
         # Color selection (reuse the color palette)
         color_section = self.create_color_selector("project")
@@ -432,7 +425,7 @@ class ActivityClassificationsDialog(QDialog):
         
         # Add button
         add_button = QPushButton("Add Project")
-        add_button.clicked.connect(self.add_new_project_advanced)
+        add_button.clicked.connect(self.add_new_project)
         add_layout.addWidget(add_button)
         
         right_layout.addWidget(add_group)
@@ -527,51 +520,36 @@ class ActivityClassificationsDialog(QDialog):
             hex_color = color.name()
             self.select_color_for_type(hex_color, prefix)
     
-    def load_categories_for_project(self):
-        """Load categories into the project category combo box"""
-        self.project_category_combo.clear()
-        try:
-            categories = self.db_manager.get_active_categories()
-            for category in categories:
-                self.project_category_combo.addItem(category['name'], category['id'])
-        except Exception as e:
-            error_print(f"Error loading categories: {e}")
     
-    def add_new_category(self):
-        """Add a new category"""
-        name = self.new_category_input.text().strip()
+    def add_new_task_category(self):
+        """Add a new task category"""
+        name = self.new_task_category_input.text().strip()
         if not name:
-            QMessageBox.warning(self, "Error", "Please enter a category name.")
+            QMessageBox.warning(self, "Error", "Please enter a task category name.")
             return
         
         try:
-            selected_color = getattr(self, "category_selected_color", "#3498db")
-            self.db_manager.create_category(name, selected_color)
+            selected_color = getattr(self, "task_category_selected_color", "#3498db")
+            self.db_manager.create_task_category(name, selected_color)
             self.refresh_category_list()
             self.refresh_project_list()  # Refresh projects since new auto-project was created
             if self.parent_window:
                 self.parent_window.load_projects()  # Refresh main window dropdown
-            self.load_categories_for_project()  # Refresh category dropdown for projects
-            self.new_category_input.clear()
+                self.parent_window.load_task_categories()  # Refresh task category dropdown
+            self.new_task_category_input.clear()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to add category: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to add task category: {str(e)}")
     
-    def add_new_project_advanced(self):
-        """Add a new project with selected color and category"""
+    def add_new_project(self):
+        """Add a new project (independent of categories now)"""
         name = self.new_project_input.text().strip()
         if not name:
             QMessageBox.warning(self, "Error", "Please enter a project name.")
             return
         
-        # Get selected category
-        if self.project_category_combo.currentData() is None:
-            QMessageBox.warning(self, "Error", "Please select a category for the project.")
-            return
-        
         try:
-            category_id = self.project_category_combo.currentData()
             selected_color = getattr(self, "project_selected_color", "#3498db")
-            self.db_manager.create_project(name, category_id, selected_color)
+            self.db_manager.create_project(name, selected_color)
             self.refresh_project_list()
             if self.parent_window:
                 self.parent_window.load_projects()  # Refresh main window dropdown

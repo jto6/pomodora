@@ -216,7 +216,7 @@ class ThemeManager:
             min-width: 70px;
         }
         
-        #projectCombo, #taskInput {
+        #projectCombo, #taskCategoryCombo, #taskInput {
             padding: 0 0;
             border: 2px solid #dee2e6;
             border-radius: 8px;
@@ -226,13 +226,13 @@ class ThemeManager:
             color: #333;
         }
         
-        #projectCombo {
+        #projectCombo, #taskCategoryCombo {
             background: white;
             selection-background-color: #667eea;
             selection-color: white;
         }
         
-        #projectCombo::drop-down {
+        #projectCombo::drop-down, #taskCategoryCombo::drop-down {
             subcontrol-origin: padding;
             subcontrol-position: top right;
             width: 24px;
@@ -242,7 +242,7 @@ class ThemeManager:
             border-bottom-right-radius: 6px;
         }
         
-        #projectCombo::down-arrow {
+        #projectCombo::down-arrow, #taskCategoryCombo::down-arrow {
             width: 0px;
             height: 0px;
             border-left: 6px solid transparent;
@@ -251,7 +251,7 @@ class ThemeManager:
             margin: 5px;
         }
         
-        #projectCombo QAbstractItemView {
+        #projectCombo QAbstractItemView, #taskCategoryCombo QAbstractItemView {
             background: white;
             border: 2px solid #667eea;
             border-radius: 8px;
@@ -261,23 +261,23 @@ class ThemeManager:
             padding: 5px;
         }
         
-        #projectCombo QAbstractItemView::item {
+        #projectCombo QAbstractItemView::item, #taskCategoryCombo QAbstractItemView::item {
             padding: 8px 12px;
             border: none;
             color: #333;
         }
         
-        #projectCombo QAbstractItemView::item:selected {
+        #projectCombo QAbstractItemView::item:selected, #taskCategoryCombo QAbstractItemView::item:selected {
             background: #667eea;
             color: white;
         }
         
-        #projectCombo QAbstractItemView::item:hover {
+        #projectCombo QAbstractItemView::item:hover, #taskCategoryCombo QAbstractItemView::item:hover {
             background: #5a6fd8;
             color: white;
         }
         
-        #projectCombo:focus, #taskInput:focus {
+        #projectCombo:focus, #taskCategoryCombo:focus, #taskInput:focus {
             border-color: #667eea;
             outline: none;
         }
@@ -715,7 +715,7 @@ class ThemeManager:
             min-width: 70px;
         }
         
-        #projectCombo, #taskInput {
+        #projectCombo, #taskCategoryCombo, #taskInput {
             padding: 0 0;
             border: 2px solid #546e7a;
             border-radius: 8px;
@@ -725,13 +725,13 @@ class ThemeManager:
             color: #ecf0f1;
         }
         
-        #projectCombo {
+        #projectCombo, #taskCategoryCombo {
             background: #455a64;
             selection-background-color: #5d6d7e;
             selection-color: white;
         }
         
-        #projectCombo::drop-down {
+        #projectCombo::drop-down, #taskCategoryCombo::drop-down {
             subcontrol-origin: padding;
             subcontrol-position: top right;
             width: 24px;
@@ -741,7 +741,7 @@ class ThemeManager:
             border-bottom-right-radius: 6px;
         }
         
-        #projectCombo::down-arrow {
+        #projectCombo::down-arrow, #taskCategoryCombo::down-arrow {
             width: 0px;
             height: 0px;
             border-left: 6px solid transparent;
@@ -750,7 +750,7 @@ class ThemeManager:
             margin: 5px;
         }
         
-        #projectCombo QAbstractItemView {
+        #projectCombo QAbstractItemView, #taskCategoryCombo QAbstractItemView {
             background: #455a64;
             border: 2px solid #5d6d7e;
             border-radius: 8px;
@@ -760,23 +760,23 @@ class ThemeManager:
             padding: 5px;
         }
         
-        #projectCombo QAbstractItemView::item {
+        #projectCombo QAbstractItemView::item, #taskCategoryCombo QAbstractItemView::item {
             padding: 8px 12px;
             border: none;
             color: #ecf0f1;
         }
         
-        #projectCombo QAbstractItemView::item:selected {
+        #projectCombo QAbstractItemView::item:selected, #taskCategoryCombo QAbstractItemView::item:selected {
             background: #5d6d7e;
             color: white;
         }
         
-        #projectCombo QAbstractItemView::item:hover {
+        #projectCombo QAbstractItemView::item:hover, #taskCategoryCombo QAbstractItemView::item:hover {
             background: #4a5a68;
             color: white;
         }
         
-        #projectCombo:focus, #taskInput:focus {
+        #projectCombo:focus, #taskCategoryCombo:focus, #taskInput:focus {
             border-color: #5d6d7e;
             outline: none;
         }

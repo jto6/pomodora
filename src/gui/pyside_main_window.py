@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PySide6.QtCore import QTimer, QTime, Qt, Signal
 from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction
 from timer.pomodoro import PomodoroTimer, TimerState
-from tracking.models import DatabaseManager, Category, Project, Sprint
+from tracking.models import DatabaseManager, TaskCategory, Project, Sprint
 from audio.alarm import play_alarm_async
 from utils.logging import verbose_print, error_print, info_print, debug_print, trace_print
 
@@ -86,6 +86,7 @@ class ModernPomodoroWindow(QMainWindow):
         
         # Sprint tracking
         self.current_project_id = None
+        self.current_task_category_id = None
         self.current_task_description = None
         
         # UI state
@@ -103,6 +104,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.load_settings()  # Load settings before applying styling
         self.apply_modern_styling()
         self.load_projects()
+        self.load_task_categories()
         self.reset_ui()
         
         # App always starts in normal mode - compact mode only activated by auto-compact or manual toggle
@@ -250,6 +252,19 @@ class ModernPomodoroWindow(QMainWindow):
         project_layout.addWidget(self.project_combo)
         project_layout.addStretch()  # Push everything to the left
         
+        # Task Category selection
+        category_layout = QHBoxLayout()
+        category_layout.setSpacing(20)  # Add spacing between label and input
+        category_label = QLabel("Category:")
+        category_label.setObjectName("inputLabel")
+        category_label.setFixedWidth(80)  # Fixed width for label
+        self.task_category_combo = QComboBox()
+        self.task_category_combo.setObjectName("taskCategoryCombo")
+        self.task_category_combo.setFixedWidth(250)  # Narrower combo box
+        category_layout.addWidget(category_label)
+        category_layout.addWidget(self.task_category_combo)
+        category_layout.addStretch()  # Push everything to the left
+        
         # Task input
         task_layout = QHBoxLayout()
         task_layout.setSpacing(20)  # Add spacing between label and input
@@ -265,6 +280,7 @@ class ModernPomodoroWindow(QMainWindow):
         task_layout.addStretch()  # Push everything to the left
         
         input_layout.addLayout(project_layout)
+        input_layout.addLayout(category_layout)
         input_layout.addLayout(task_layout)
         layout.addWidget(input_frame)
         
@@ -417,6 +433,42 @@ class ModernPomodoroWindow(QMainWindow):
             traceback.print_exc()
             # Add fallback option
             self.project_combo.addItem("Default Project", 1)
+    
+    def load_task_categories(self):
+        """Load task categories from database"""
+        try:
+            task_categories = self.db_manager.get_active_task_categories()
+            self.task_category_combo.clear()
+            debug_print(f"Found {len(task_categories)} active task categories")
+            
+            for task_category in task_categories:
+                display_name = task_category['name']
+                debug_print(f"Adding task category: {display_name}")
+                trace_print(f"Task Category details: ID={task_category['id']}, Color={task_category['color']}, Active={task_category['active']}")
+                self.task_category_combo.addItem(display_name, task_category['id'])
+            
+            if not task_categories:
+                debug_print("No task categories found - default task categories should have been created during initialization")
+                # Re-initialize defaults if somehow missing
+                self.db_manager.initialize_default_projects()  # This creates both task categories and projects
+                # Reload task categories after initialization
+                task_categories = self.db_manager.get_active_task_categories()
+                for task_category in task_categories:
+                    display_name = task_category['name']
+                    self.task_category_combo.addItem(display_name, task_category['id'])
+                
+            debug_print(f"Task category combo has {self.task_category_combo.count()} items")
+            
+            # Set default selection to first task category if available
+            if self.task_category_combo.count() > 0:
+                self.task_category_combo.setCurrentIndex(0)
+                debug_print(f"Set default task category selection: {self.task_category_combo.currentText()} (ID: {self.task_category_combo.currentData()})")
+        except Exception as e:
+            error_print(f"Error loading task categories: {e}")
+            import traceback
+            traceback.print_exc()
+            # Add fallback option
+            self.task_category_combo.addItem("Default Task Category", 1)
             
     def toggle_timer(self):
         """Start or pause the timer"""
@@ -426,9 +478,10 @@ class ModernPomodoroWindow(QMainWindow):
         if self.pomodoro_timer.state == TimerState.STOPPED:
             # Start new sprint
             self.current_project_id = self.project_combo.currentData()
+            self.current_task_category_id = self.task_category_combo.currentData()
             self.current_task_description = self.task_input.text().strip() or None
             
-            debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task: '{self.current_task_description}'")
+            debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
             self.qt_timer.start(1000)  # Update every second
             self.start_button.setText("Pause")
@@ -562,7 +615,8 @@ class ModernPomodoroWindow(QMainWindow):
                 task_desc = self.current_task_description or "Pomodoro Sprint"
                 
                 sprint = Sprint(
-                    project_name=project_name,
+                    project_id=self.current_project_id,
+                    task_category_id=self.current_task_category_id,
                     task_description=task_desc,
                     start_time=start_time,
                     end_time=datetime.now(),

@@ -124,6 +124,11 @@ class GoogleDriveSync:
         try:
             db_filename = os.path.basename(local_db_path)
             
+            # Safety check: only upload files named 'pomodora.db'
+            if db_filename != 'pomodora.db':
+                error_print(f"Refusing to upload non-standard database file: {db_filename}")
+                return False
+            
             # Check if database already exists in Drive
             results = self.service.files().list(
                 q=f"name='{db_filename}' and parents in '{self.folder_id}' and trashed=false",

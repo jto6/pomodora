@@ -7,7 +7,7 @@ A modern cross-platform GUI application for Pomodoro technique activity tracking
 This application provides:
 - **Pomodoro Timer**: Customizable sprint (1-60 min) and break (1-30 min) durations with automatic transitions
 - **Audio Alarms**: Configurable alarms with system sounds, generated tones, and custom sound files
-- **Activity Tracking**: Hierarchical Categories → Projects → Sprints data model with task logging
+- **Activity Tracking**: Independent Task Categories and Projects with 3-field Sprint logging (Project + Task Category + Description)
 - **Google Drive Sync**: Multi-workstation database synchronization with configurable folder location
 - **Modern GUI**: PySide6-based interface with dark/light themes and compact mode
 - **Data Export**: Excel export functionality with detailed sprint reports
@@ -66,6 +66,7 @@ pomodora/
 │       ├── __init__.py
 │       ├── models.py               # SQLAlchemy database models
 │       ├── database_backup.py      # Database backup management system
+│       ├── operation_log.py        # In-memory operation tracking for database merging
 │       ├── local_settings.py      # Local configuration management
 │       └── google_drive.py         # Google Drive API integration
 ├── requirements.txt                # Python dependencies
@@ -89,8 +90,11 @@ pomodora/
 
 ### Data Management
 - **Local Settings**: JSON files in `~/.config/pomodora/` for workstation-specific preferences
-- **Shared Database**: SQLite database with Categories → Projects → Sprints hierarchy
-- **Google Drive Sync**: Multi-workstation database sharing with configurable folder location
+- **Modern Database Schema**: SQLite with foreign key relationships (Task Categories ↔ Projects ↔ Sprints)
+- **Independent Task Categories**: Task categories and projects are decoupled for flexible organization
+- **Foreign Key Integrity**: Database uses proper foreign key relationships instead of string references
+- **Google Drive Sync**: Multi-workstation database sharing with intelligent merge operations
+- **Operation-Based Merging**: In-memory operation tracking ensures proper conflict resolution
 - **Leader Election Sync**: Distributed leader election algorithm prevents race conditions
 - **Thread-Safe Operations**: Qt signal/slot mechanism ensures GUI thread safety
 - **Automatic Backups**: Local backup system with daily/monthly/yearly retention policies
@@ -98,7 +102,8 @@ pomodora/
 ### User Interface
 - **Themes**: Dark/Light mode with modern PySide6 styling
 - **Compact Mode**: Click-anywhere-to-exit minimal timer view
-- **Activity Classifications**: Hierarchical project management with color coding
+- **Activity Classifications**: Independent task categories and projects with flexible assignment
+- **3-Field Sprint Creation**: Project, Task Category, and Task Description for detailed tracking
 - **Settings Dialog**: Comprehensive configuration with browse buttons and test features
 
 ## Logging Levels
@@ -168,7 +173,8 @@ The application is **production-ready** for deployment across multiple workstati
 - **Race-Condition Free**: Distributed leader election algorithm ensures only one workstation syncs at a time
 - **4-Phase Process**: Intent registration → Coordination wait → Leader election → Atomic sync
 - **Fault Tolerant**: Failed syncs don't affect other workstations, automatic cleanup and retry
-- **Data Integrity**: All sprints from all workstations are preserved through proper database merging
+- **Operation-Based Merging**: In-memory operation tracking replays local changes onto remote database
+- **Data Integrity**: All sprints from all workstations are preserved through intelligent conflict resolution
 
 ### Thread Safety
 - **Qt Signal/Slot Architecture**: Timer callbacks use Qt signals to prevent threading issues
