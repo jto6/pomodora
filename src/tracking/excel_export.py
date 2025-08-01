@@ -5,8 +5,9 @@ from datetime import datetime, timedelta
 import calendar
 from sqlalchemy import and_
 from .models import DatabaseManager, Sprint, Project
+from utils.progress_wrapper import with_progress, ProgressCapableMixin
 
-class ExcelExporter:
+class ExcelExporter(ProgressCapableMixin):
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
@@ -18,6 +19,7 @@ class ExcelExporter:
             'border': '000000'
         }
 
+    @with_progress("Exporting Monthly Data", "Creating Excel workbook with monthly analysis...")
     def export_month(self, year: int, month: int, filename: str):
         """Export data for a specific month in template format"""
         # Create workbook
@@ -250,6 +252,7 @@ class ExcelExporter:
         finally:
             session.close()
 
+    @with_progress("Exporting Date Range", "Generating Excel report for selected date range...")
     def export_date_range(self, start_date: datetime, end_date: datetime, filename: str):
         """Export data for a specific date range"""
         wb = openpyxl.Workbook()
@@ -347,6 +350,7 @@ class ExcelExporter:
 
         return stats
 
+    @with_progress("Exporting All Data", "Creating comprehensive Excel workbook with all sprint data...")
     def export_all_data(self, filename: str):
         """Export all data in a comprehensive workbook"""
         wb = openpyxl.Workbook()

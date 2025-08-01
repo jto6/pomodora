@@ -9,6 +9,7 @@ from timer.pomodoro import PomodoroTimer, TimerState
 from tracking.models import DatabaseManager, TaskCategory, Project, Sprint
 from audio.alarm import play_alarm_async
 from utils.logging import verbose_print, error_print, info_print, debug_print, trace_print
+from utils.progress_wrapper import run_with_auto_progress
 
 # Import the new component modules
 from gui.components.theme_manager import ThemeManager
@@ -461,6 +462,15 @@ class ModernPomodoroWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        # Add sync option if Google Drive is configured
+        from tracking.local_settings import get_local_settings
+        settings = get_local_settings()
+        if settings.get('database_type') == 'google_drive':
+            sync_action = QAction('Sync with Google Drive...', self)
+            sync_action.triggered.connect(self.manual_sync)
+            file_menu.addAction(sync_action)
+            file_menu.addSeparator()
+
         quit_action = QAction('Quit', self)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
@@ -516,90 +526,107 @@ class ModernPomodoroWindow(QMainWindow):
 
     def load_projects(self):
         """Load projects from database"""
-        try:
-            projects = self.db_manager.get_active_projects()
-            self.project_combo.clear()
-            debug_print(f"Found {len(projects)} active projects")
-
-            # Sort projects alphabetically by name
-            projects = sorted(projects, key=lambda p: p['name'].lower())
-
-            for project in projects:
-                # Use just the project name
-                display_name = project['name']
-                debug_print(f"Adding project: {display_name}")
-                trace_print(f"Project details: ID={project['id']}, Color={project['color']}, Active={project['active']}")
-                self.project_combo.addItem(display_name, project['id'])
-
-            if not projects:
-                debug_print("No projects found - default projects should have been created during initialization")
-                # Re-initialize defaults if somehow missing
-                self.db_manager.initialize_default_projects()
-                # Reload projects after initialization
+        def do_load():
+            try:
                 projects = self.db_manager.get_active_projects()
+                self.project_combo.clear()
+                debug_print(f"Found {len(projects)} active projects")
+
                 # Sort projects alphabetically by name
                 projects = sorted(projects, key=lambda p: p['name'].lower())
+
                 for project in projects:
+                    # Use just the project name
                     display_name = project['name']
+                    debug_print(f"Adding project: {display_name}")
+                    trace_print(f"Project details: ID={project['id']}, Color={project['color']}, Active={project['active']}")
                     self.project_combo.addItem(display_name, project['id'])
 
-            debug_print(f"Project combo has {self.project_combo.count()} items")
+                if not projects:
+                    debug_print("No projects found - default projects should have been created during initialization")
+                    # Re-initialize defaults if somehow missing
+                    self.db_manager.initialize_default_projects()
+                    # Reload projects after initialization
+                    projects = self.db_manager.get_active_projects()
+                    # Sort projects alphabetically by name
+                    projects = sorted(projects, key=lambda p: p['name'].lower())
+                    for project in projects:
+                        display_name = project['name']
+                        self.project_combo.addItem(display_name, project['id'])
 
-            # Set default selection to first project if available
-            if self.project_combo.count() > 0:
-                self.project_combo.setCurrentIndex(0)
-                debug_print(f"Set default project selection: {self.project_combo.currentText()} (ID: {self.project_combo.currentData()})")
-                # Initialize tracking variable
-                self._last_project_text = self.project_combo.currentText()
-        except Exception as e:
-            error_print(f"Error loading projects: {e}")
-            import traceback
-            traceback.print_exc()
-            # Add fallback option
-            self.project_combo.addItem("Default Project", 1)
+                debug_print(f"Project combo has {self.project_combo.count()} items")
+
+                # Set default selection to first project if available
+                if self.project_combo.count() > 0:
+                    self.project_combo.setCurrentIndex(0)
+                    debug_print(f"Set default project selection: {self.project_combo.currentText()} (ID: {self.project_combo.currentData()})")
+                    # Initialize tracking variable
+                    self._last_project_text = self.project_combo.currentText()
+            except Exception as e:
+                error_print(f"Error loading projects: {e}")
+                import traceback
+                traceback.print_exc()
+                # Add fallback option
+                self.project_combo.addItem("Default Project", 1)
+        
+        # For fast operations, just run directly. For slow ones, run with progress
+        try:
+            # Most project loading is fast, but with progress wrapper it will automatically show progress if > 1s
+            run_with_auto_progress(do_load, "Loading Projects", self, min_duration=1.0)
+        except Exception:
+            # Fallback to direct execution if progress wrapper fails
+            do_load()
 
     def load_task_categories(self):
         """Load task categories from database"""
-        try:
-            task_categories = self.db_manager.get_active_task_categories()
-            self.task_category_combo.clear()
-            debug_print(f"Found {len(task_categories)} active task categories")
-
-            # Sort task categories alphabetically by name
-            task_categories = sorted(task_categories, key=lambda tc: tc['name'].lower())
-
-            for task_category in task_categories:
-                display_name = task_category['name']
-                debug_print(f"Adding task category: {display_name}")
-                trace_print(f"Task Category details: ID={task_category['id']}, Color={task_category['color']}, Active={task_category['active']}")
-                self.task_category_combo.addItem(display_name, task_category['id'])
-
-            if not task_categories:
-                debug_print("No task categories found - default task categories should have been created during initialization")
-                # Re-initialize defaults if somehow missing
-                self.db_manager.initialize_default_projects()  # This creates both task categories and projects
-                # Reload task categories after initialization
+        def do_load():
+            try:
                 task_categories = self.db_manager.get_active_task_categories()
+                self.task_category_combo.clear()
+                debug_print(f"Found {len(task_categories)} active task categories")
+
                 # Sort task categories alphabetically by name
                 task_categories = sorted(task_categories, key=lambda tc: tc['name'].lower())
+
                 for task_category in task_categories:
                     display_name = task_category['name']
+                    debug_print(f"Adding task category: {display_name}")
+                    trace_print(f"Task Category details: ID={task_category['id']}, Color={task_category['color']}, Active={task_category['active']}")
                     self.task_category_combo.addItem(display_name, task_category['id'])
 
-            debug_print(f"Task category combo has {self.task_category_combo.count()} items")
+                if not task_categories:
+                    debug_print("No task categories found - default task categories should have been created during initialization")
+                    # Re-initialize defaults if somehow missing
+                    self.db_manager.initialize_default_projects()  # This creates both task categories and projects
+                    # Reload task categories after initialization
+                    task_categories = self.db_manager.get_active_task_categories()
+                    # Sort task categories alphabetically by name
+                    task_categories = sorted(task_categories, key=lambda tc: tc['name'].lower())
+                    for task_category in task_categories:
+                        display_name = task_category['name']
+                        self.task_category_combo.addItem(display_name, task_category['id'])
 
-            # Set default selection to first task category if available
-            if self.task_category_combo.count() > 0:
-                self.task_category_combo.setCurrentIndex(0)
-                debug_print(f"Set default task category selection: {self.task_category_combo.currentText()} (ID: {self.task_category_combo.currentData()})")
-                # Initialize tracking variable
-                self._last_category_text = self.task_category_combo.currentText()
-        except Exception as e:
-            error_print(f"Error loading task categories: {e}")
-            import traceback
-            traceback.print_exc()
-            # Add fallback option
-            self.task_category_combo.addItem("Default Task Category", 1)
+                debug_print(f"Task category combo has {self.task_category_combo.count()} items")
+
+                # Set default selection to first task category if available
+                if self.task_category_combo.count() > 0:
+                    self.task_category_combo.setCurrentIndex(0)
+                    debug_print(f"Set default task category selection: {self.task_category_combo.currentText()} (ID: {self.task_category_combo.currentData()})")
+                    # Initialize tracking variable
+                    self._last_category_text = self.task_category_combo.currentText()
+            except Exception as e:
+                error_print(f"Error loading task categories: {e}")
+                import traceback
+                traceback.print_exc()
+                # Add fallback option
+                self.task_category_combo.addItem("Default Task Category", 1)
+        
+        # Use progress wrapper for automatic progress display
+        try:
+            run_with_auto_progress(do_load, "Loading Task Categories", self, min_duration=1.0)
+        except Exception:
+            # Fallback to direct execution if progress wrapper fails
+            do_load()
 
     def toggle_timer(self):
         """Start or pause the timer"""
@@ -989,12 +1016,22 @@ class ModernPomodoroWindow(QMainWindow):
             )
 
             if file_path:
-                from tracking.excel_export import ExcelExporter
-                exporter = ExcelExporter(self.db_manager)
-                exporter.export_all_data(file_path)
+                def do_export():
+                    from tracking.excel_export import ExcelExporter
+                    exporter = ExcelExporter(self.db_manager)
+                    exporter.export_all_data(file_path)
+                    return file_path
+                
+                # Run export with automatic progress dialog
+                exported_file = run_with_auto_progress(
+                    do_export,
+                    "Exporting to Excel",
+                    parent=self,
+                    min_duration=0.5  # Show progress for exports taking > 0.5s
+                )
 
                 QMessageBox.information(self, "Export Complete",
-                                      f"Data exported successfully to:\n{file_path}")
+                                      f"Data exported successfully to:\n{exported_file}")
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{str(e)}")
 
@@ -1021,6 +1058,32 @@ class ModernPomodoroWindow(QMainWindow):
 
         # Refresh UI state after settings dialog closes
         self.refresh_ui_state()
+
+    def manual_sync(self):
+        """Manually trigger database sync with Google Drive"""
+        try:
+            success = self.db_manager.sync_with_progress(self)
+            
+            from PySide6.QtWidgets import QMessageBox
+            if success:
+                QMessageBox.information(
+                    self, 
+                    "Sync Complete", 
+                    "Database successfully synced with Google Drive."
+                )
+            else:
+                QMessageBox.warning(
+                    self, 
+                    "Sync Failed", 
+                    "Failed to sync database with Google Drive.\nCheck the logs for more details."
+                )
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self, 
+                "Sync Error", 
+                f"An error occurred during sync:\n{str(e)}"
+            )
 
     def refresh_ui_state(self):
         """Refresh UI elements to match current timer state"""

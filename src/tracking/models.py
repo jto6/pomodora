@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
 from utils.logging import verbose_print, error_print, info_print, debug_print, trace_print
+from utils.progress_wrapper import with_progress, ProgressCapableMixin
 from .database_backup import DatabaseBackupManager
 from .operation_log import OperationTracker, DatabaseMerger
 
@@ -65,7 +66,7 @@ class Sprint(Base):
 # Settings are now stored locally in ~/.config/pomodora/local_settings.json
 # The database only contains task_categories, projects, and sprints for sharing between desktops
 
-class DatabaseManager:
+class DatabaseManager(ProgressCapableMixin):
     def __init__(self, db_path=None):
         if db_path is None:
             # Create database in the same directory as this script
@@ -277,6 +278,41 @@ class DatabaseManager:
         """Remove finished sync threads from tracking list"""
         self._background_sync_threads = [t for t in self._background_sync_threads if t.is_alive()]
 
+    def sync_with_progress(self, parent_widget=None) -> bool:
+        """
+        Perform database sync with progress dialog (for user-initiated syncs).
+        This method shows a progress dialog during time-consuming sync operations.
+        
+        Args:
+            parent_widget: Parent widget for the progress dialog
+            
+        Returns:
+            bool: True if sync succeeded, False otherwise
+        """
+        if not self.google_drive_manager or not self.google_drive_manager.is_enabled():
+            error_print("Google Drive sync is not configured")
+            return False
+            
+        # Import here to avoid circular imports
+        try:
+            from gui.components.sync_progress_dialog import show_sync_progress
+        except ImportError:
+            # Fallback to background sync if GUI components not available
+            self._sync_to_google_drive()  # Use existing background sync method
+            return True
+        
+        def sync_operation():
+            """The actual sync operation to run in background"""
+            return self._leader_election_sync()
+        
+        # Show progress dialog and perform sync
+        return show_sync_progress(
+            parent_widget,
+            sync_operation,
+            "Syncing database with Google Drive",
+            "Database Sync"
+        )
+
     def wait_for_pending_syncs(self, timeout=10.0):
         """Wait for pending background syncs to complete (with timeout)"""
         if not self._background_sync_threads:
@@ -339,6 +375,7 @@ class DatabaseManager:
             return self.google_drive_manager.get_status()
         return {'enabled': False}
 
+    @with_progress("Initializing Database", "Setting up default projects and categories...")
     def initialize_default_projects(self):
         """Ensure default task categories and projects exist in the database"""
         session = self.get_session()
