@@ -178,8 +178,34 @@ class PySideDataViewerWindow(QWidget):
         layout.addLayout(button_layout)
 
     def apply_styling(self):
-        """Apply modern styling"""
-        style = """
+        """Apply modern styling with theme support"""
+        # Detect current theme from parent or settings
+        is_dark_mode = self.get_current_theme() == "dark"
+        
+        if is_dark_mode:
+            style = self.get_dark_theme_style()
+        else:
+            style = self.get_light_theme_style()
+
+        self.setStyleSheet(style)
+    
+    def get_current_theme(self):
+        """Get current theme from parent window or settings"""
+        # Try to get theme from parent window first
+        if hasattr(self.parent, 'theme_mode'):
+            return self.parent.theme_mode
+        
+        # Fallback to settings
+        try:
+            from tracking.local_settings import get_local_settings
+            settings = get_local_settings()
+            return settings.get('theme_mode', 'light')
+        except:
+            return 'light'
+    
+    def get_light_theme_style(self):
+        """Get light theme stylesheet"""
+        return """
         QWidget {
             background: #f8f9fa;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui;
@@ -308,8 +334,162 @@ class PySideDataViewerWindow(QWidget):
             background: #f8f9fa;
         }
         """
+    
+    def get_dark_theme_style(self):
+        """Get dark theme stylesheet"""
+        return """
+        QWidget {
+            background: #2b2b2b;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui;
+        }
 
-        self.setStyleSheet(style)
+        #headerFrame {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 #4a5568, stop:1 #2d3748);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        #titleLabel {
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+        }
+
+        #filterFrame {
+            background: #3c3c3c;
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #4a5568;
+        }
+
+        #statsLabel {
+            font-weight: bold;
+            color: #e2e8f0;
+            background: #4a5568;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        #summaryFrame {
+            background: #3c3c3c;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #4a5568;
+        }
+
+        #summaryText {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #e2e8f0;
+        }
+
+        QTableWidget {
+            background: #3c3c3c;
+            border: 2px solid #4a5568;
+            border-radius: 10px;
+            gridline-color: #4a5568;
+            font-size: 13px;
+            color: #ffffff;
+        }
+
+        QTableWidget::item {
+            padding: 8px;
+            border-bottom: 1px solid #4a5568;
+            background: #3c3c3c;
+            color: #ffffff;
+        }
+
+        QTableWidget::item:alternate {
+            background: #2d3748;
+            color: #ffffff;
+        }
+
+        QTableWidget::item:selected {
+            background: #667eea;
+            color: white;
+        }
+
+        QHeaderView::section {
+            background: #2d3748;
+            border: 1px solid #4a5568;
+            padding: 10px 8px;
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+
+        QPushButton {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        QPushButton:hover {
+            background: #5a6fd8;
+        }
+
+        QPushButton:pressed {
+            background: #4c63d2;
+        }
+
+        QComboBox, QDateEdit {
+            background: #4a5568;
+            color: #ffffff;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+
+        QComboBox:focus, QDateEdit:focus {
+            border-color: #90cdf4;
+        }
+
+        QComboBox::drop-down {
+            border: none;
+        }
+
+        QComboBox::down-arrow {
+            color: #ffffff;
+        }
+
+        QTabWidget::pane {
+            border: 2px solid #4a5568;
+            border-radius: 10px;
+            background: #3c3c3c;
+        }
+
+        QTabBar::tab {
+            background: #2d3748;
+            color: #a0aec0;
+            border: none;
+            padding: 10px 20px;
+            margin-right: 2px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            font-weight: bold;
+        }
+
+        QTabBar::tab:selected {
+            background: #3c3c3c;
+            color: #667eea;
+        }
+
+        QTabBar::tab:hover {
+            background: #4a5568;
+            color: #e2e8f0;
+        }
+
+        QLabel {
+            color: #e2e8f0;
+        }
+        """
 
     def on_view_changed(self, view):
         """Handle view type change"""
