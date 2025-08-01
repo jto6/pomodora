@@ -9,12 +9,13 @@ activity tracking, project management, and Excel export capabilities.
 import sys
 import os
 import argparse
+import signal
 from pathlib import Path
 
 # Add src directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from utils.logging import set_verbose_level
+from utils.logging import set_verbose_level, info_print
 from gui.pyside_main_window import main
 
 def parse_args():
@@ -29,6 +30,32 @@ def parse_args():
     parser.add_argument("--no-audio", action="store_true",
                        help="Disable audio alarms (silent mode)")
     return parser.parse_args()
+
+def setup_signal_handlers():
+    """Setup signal handlers for graceful shutdown"""
+    def signal_handler(signum, frame):
+        info_print(f"Received signal {signum}, initiating graceful shutdown...")
+        
+        # Try to access the main window if it exists
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            # Find the main window
+            for widget in app.allWidgets():
+                if hasattr(widget, 'db_manager') and widget.db_manager:
+                    info_print("Completing pending database syncs before exit...")
+                    if hasattr(widget.db_manager, 'wait_for_pending_syncs'):
+                        widget.db_manager.wait_for_pending_syncs(timeout=10.0)
+                    break
+            
+            # Close the application gracefully
+            app.quit()
+        else:
+            sys.exit(0)
+    
+    # Register handlers for common termination signals
+    signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # Termination request
 
 if __name__ == "__main__":
     args = parse_args()
@@ -51,5 +78,8 @@ if __name__ == "__main__":
     
     if args.no_audio:
         print("Pomodora starting in silent mode (no audio alarms)...")
+    
+    # Setup signal handlers for graceful shutdown
+    setup_signal_handlers()
     
     main()

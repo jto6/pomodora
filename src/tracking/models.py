@@ -267,8 +267,8 @@ class DatabaseManager:
                     except ValueError:
                         pass  # Thread might have been cleaned up already
             
-            # Run sync in background thread (daemon so it doesn't prevent app exit)
-            sync_thread = threading.Thread(target=background_sync, daemon=True, name="GoogleDriveSync")
+            # Run sync in background thread (non-daemon so it can complete on app exit)
+            sync_thread = threading.Thread(target=background_sync, daemon=False, name="GoogleDriveSync")
             self._background_sync_threads.append(sync_thread)
             sync_thread.start()
             debug_print(f"Background sync thread started (active threads: {len(self._background_sync_threads)})")
