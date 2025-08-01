@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime, timedelta
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                               QHBoxLayout, QLabel, QPushButton, QComboBox, 
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                               QHBoxLayout, QLabel, QPushButton, QComboBox,
                                QLineEdit, QProgressBar, QFrame, QTextEdit, QMenuBar, QMenu)
 from PySide6.QtCore import QTimer, QTime, Qt, Signal
 from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction
@@ -18,18 +18,18 @@ from gui.components.activity_manager import ActivityClassificationsDialog
 
 class ModernPomodoroWindow(QMainWindow):
     """Modern, colorful PySide6 Pomodoro timer with elegant design"""
-    
+
     # Qt signals for thread-safe timer callbacks
     sprint_completed = Signal()
     break_completed = Signal()
-    
+
     def __init__(self):
         super().__init__()
         # Initialize database manager with configurable location
         from tracking.local_settings import get_local_settings
         settings = get_local_settings()
         db_type = settings.get('database_type', 'local')
-        
+
         if db_type == 'local':
             db_path = settings.get('database_local_path', '')
             if not db_path:
@@ -62,7 +62,7 @@ class ModernPomodoroWindow(QMainWindow):
         info_print("Database initialized")
         self.db_manager.initialize_default_projects()  # Ensure default projects exist
         info_print("Default projects initialized")
-        
+
         # Debug: Check existing sprints on startup
         try:
             from datetime import date
@@ -72,33 +72,37 @@ class ModernPomodoroWindow(QMainWindow):
         except Exception as e:
             error_print(f"Error checking existing sprints: {e}")
         self.pomodoro_timer = PomodoroTimer()
-        
+
         # Set up timer callbacks using thread-safe signals
         self.pomodoro_timer.on_sprint_complete = self.emit_sprint_complete
         self.pomodoro_timer.on_break_complete = self.emit_break_complete
-        
+
         # Connect signals to slot methods (these run on main thread)
         self.sprint_completed.connect(self.handle_sprint_complete)
         self.break_completed.connect(self.handle_break_complete)
-        
+
         self.qt_timer = QTimer()
         self.qt_timer.timeout.connect(self.update_display)
-        
+
         # Sprint tracking
         self.current_project_id = None
         self.current_task_category_id = None
         self.current_task_description = None
         
+        # Field synchronization tracking
+        self._last_project_text = ""
+        self._last_category_text = ""
+
         # UI state
         self.compact_mode = False
         self.auto_compact_mode = True  # Auto-enter compact mode on sprint start
         self.theme_mode = "light"  # light, dark, or system
         self.normal_size = (500, 680)
         self.compact_size = (300, 180)  # Increased size for better visibility
-        
+
         # Initialize theme manager
         self.theme_manager = ThemeManager(self)
-        
+
         self.init_ui()
         self.create_menu_bar()
         self.load_settings()  # Load settings before applying styling
@@ -106,18 +110,18 @@ class ModernPomodoroWindow(QMainWindow):
         self.load_projects()
         self.load_task_categories()
         self.reset_ui()
-        
+
         # Ensure proper initial layout geometry
         self.centralWidget().updateGeometry()
         self.update()
-        
+
         # App always starts in normal mode - compact mode only activated by auto-compact or manual toggle
-        
+
         # Update stats on startup - call AFTER reset_ui
         debug_print("Calling update_stats() on startup")
         self.update_stats()
         debug_print(f"Stats label text after update: '{self.stats_label.text()}'")
-    
+
     def mousePressEvent(self, event):
         """Handle mouse clicks - exit compact mode on any click"""
         if self.compact_mode:
@@ -128,43 +132,43 @@ class ModernPomodoroWindow(QMainWindow):
         """Handle application close event to prevent segfault"""
         try:
             debug_print("Starting application cleanup...")
-            
+
             # Stop Qt timer first
             if hasattr(self, 'qt_timer') and self.qt_timer:
                 self.qt_timer.stop()
                 info_print("Qt timer stopped")
-            
+
             # Stop pomodoro timer
             if hasattr(self, 'pomodoro_timer') and self.pomodoro_timer:
                 self.pomodoro_timer.stop()
                 info_print("Pomodoro timer stopped")
-            
+
             # Close database connections properly
             if hasattr(self, 'db_manager') and self.db_manager:
                 # Check if there are pending syncs
                 if hasattr(self.db_manager, '_background_sync_threads') and self.db_manager._background_sync_threads:
                     sync_count = len(self.db_manager._background_sync_threads)
                     info_print(f"Waiting for {sync_count} pending database sync(s) to complete...")
-                    
+
                     # Show progress to user if there are active syncs
                     from PySide6.QtWidgets import QProgressDialog
                     from PySide6.QtCore import Qt, QTimer
-                    
+
                     progress = QProgressDialog("Syncing database changes...", "Force Quit", 0, 100, self)
                     progress.setWindowTitle("Saving Data")
                     progress.setWindowModality(Qt.WindowModal)
                     progress.setMinimumDuration(500)  # Show after 500ms
-                    
+
                     # Create timer to update progress
                     timer = QTimer()
                     start_time = __import__('time').time()
                     timeout = 15.0  # Extended timeout for user-initiated shutdown
-                    
+
                     def update_progress():
                         elapsed = __import__('time').time() - start_time
                         progress_value = min(int((elapsed / timeout) * 100), 99)
                         progress.setValue(progress_value)
-                        
+
                         # Check if syncs are complete
                         if hasattr(self.db_manager, '_background_sync_threads'):
                             remaining = len([t for t in self.db_manager._background_sync_threads if t.is_alive()])
@@ -174,7 +178,7 @@ class ModernPomodoroWindow(QMainWindow):
                                 progress.close()
                                 info_print("All database syncs completed")
                                 return
-                        
+
                         # Check for timeout or user cancellation
                         if elapsed >= timeout or progress.wasCanceled():
                             timer.stop()
@@ -183,69 +187,69 @@ class ModernPomodoroWindow(QMainWindow):
                                 info_print("Database sync cancelled by user")
                             else:
                                 error_print(f"Database sync timeout after {timeout}s")
-                    
+
                     timer.timeout.connect(update_progress)
                     timer.start(100)  # Update every 100ms
-                    
+
                     # Wait for syncs to complete or timeout
                     self.db_manager.wait_for_pending_syncs(timeout=timeout)
-                    
+
                     timer.stop()
                     progress.close()
-                
+
                 info_print("Database cleanup completed")
-            
+
             # Clean up any references
             self.pomodoro_timer = None
             self.db_manager = None
-            
+
             info_print("Cleanup completed successfully")
             # Accept the close event
             event.accept()
         except Exception as e:
             error_print(f"Error during cleanup: {e}")
             event.accept()
-        
+
     def init_ui(self):
         """Initialize the modern UI layout"""
         self.setWindowTitle("Pomodora - Modern Pomodoro Timer")
         self.setFixedSize(*self.normal_size)  # Use the defined normal size
-        
+
         # Central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(5)
         main_layout.setContentsMargins(25, 25, 25, 25)
-        
+
         # Header with app title
         self.create_header(main_layout)
-        
+
         # Timer display section with integrated progress bar
         self.create_timer_section(main_layout)
-        
+
         # Project and task input
         self.create_input_section(main_layout)
-        
+
         # Control buttons
         self.create_control_section(main_layout)
-        
+
         # Status and stats
         self.create_status_section(main_layout)
-        
+
     def create_header(self, layout):
         """Create modern header with app title"""
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
         header_layout = QHBoxLayout(header_frame)
-        
+
         title_label = QLabel("🍅 Pomodora")
         title_label.setObjectName("titleLabel")
         title_label.setAlignment(Qt.AlignCenter)
-        
+
         header_layout.addWidget(title_label)
         layout.addWidget(header_frame)
-        
+
     def create_timer_section(self, layout):
         """Create the main timer display with integrated progress bar"""
         timer_frame = QFrame()
@@ -255,17 +259,17 @@ class ModernPomodoroWindow(QMainWindow):
         timer_layout.setAlignment(Qt.AlignCenter)
         timer_layout.setSpacing(10)
         timer_layout.setContentsMargins(11, 11, 11, 11)
-        
+
         # Timer display
         self.time_label = QLabel("25:00")
         self.time_label.setObjectName("timeLabel")
         self.time_label.setAlignment(Qt.AlignCenter)
-        
+
         # Timer state label
         self.state_label = QLabel("Ready to Focus")
         self.state_label.setObjectName("stateLabel")
         self.state_label.setAlignment(Qt.AlignCenter)
-        
+
         # Progress bar integrated into timer section
         self.progress_bar = QProgressBar()
         self.progress_bar.setObjectName("progressBar")
@@ -274,54 +278,54 @@ class ModernPomodoroWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.progress_bar.setFixedHeight(8)
         self.progress_bar.setVisible(True)  # Ensure it's visible
-        
+
         # Create compact control buttons (initially hidden)
         self.compact_controls_frame = QFrame()
         self.compact_controls_frame.setObjectName("compactControlsFrame")
         compact_controls_layout = QHBoxLayout(self.compact_controls_frame)
         compact_controls_layout.setSpacing(8)  # Smaller spacing for compact mode
         compact_controls_layout.setContentsMargins(5, 5, 5, 5)
-        
+
         # Compact Start/Pause button
         self.compact_start_button = QPushButton("Start")
         self.compact_start_button.setObjectName("compactStartButton")
         self.compact_start_button.clicked.connect(self.toggle_timer)
         self.compact_start_button.setFixedSize(60, 24)  # Smaller size for compact mode
-        
+
         # Compact Stop button
         self.compact_stop_button = QPushButton("Stop")
         self.compact_stop_button.setObjectName("compactStopButton")
         self.compact_stop_button.clicked.connect(self.stop_timer)
         self.compact_stop_button.setEnabled(False)
         self.compact_stop_button.setFixedSize(50, 24)  # Smaller size for compact mode
-        
+
         # Compact Complete button
         self.compact_complete_button = QPushButton("Done")
         self.compact_complete_button.setObjectName("compactCompleteButton")
         self.compact_complete_button.clicked.connect(self.complete_sprint)
         self.compact_complete_button.setEnabled(False)
         self.compact_complete_button.setFixedSize(50, 24)  # Smaller size for compact mode
-        
+
         compact_controls_layout.addWidget(self.compact_start_button)
         compact_controls_layout.addWidget(self.compact_stop_button)
         compact_controls_layout.addWidget(self.compact_complete_button)
-        
+
         # Add to timer layout
         timer_layout.addWidget(self.time_label)
         timer_layout.addWidget(self.state_label)
         timer_layout.addWidget(self.progress_bar)
         timer_layout.addWidget(self.compact_controls_frame)
-        
+
         # Hide compact controls initially (only shown in compact mode)
         self.compact_controls_frame.hide()
-        
+
         layout.addWidget(timer_frame)
-    
+
     def sync_compact_buttons(self):
         """Synchronize compact button states with main control buttons"""
         # In compact mode, only show controls for active sprints
         main_text = self.start_button.text()
-        
+
         if "Start" in main_text:
             # Hide start button in compact mode - user needs to use main interface to start new sprints
             self.compact_start_button.hide()
@@ -339,8 +343,8 @@ class ModernPomodoroWindow(QMainWindow):
             self.compact_start_button.setEnabled(True)
             self.compact_stop_button.setEnabled(True)
             self.compact_complete_button.setEnabled(True)
-        
-        
+
+
     def create_input_section(self, layout):
         """Create project and task input section"""
         input_frame = QFrame()
@@ -349,7 +353,7 @@ class ModernPomodoroWindow(QMainWindow):
         input_layout = QVBoxLayout(input_frame)
         input_layout.setContentsMargins(15, 15, 15, 15)
         input_layout.setSpacing(15)
-        
+
         # Project selection
         project_layout = QHBoxLayout()
         project_layout.setSpacing(20)  # Add spacing between label and input
@@ -359,10 +363,11 @@ class ModernPomodoroWindow(QMainWindow):
         self.project_combo = QComboBox()
         self.project_combo.setObjectName("projectCombo")
         self.project_combo.setFixedWidth(250)  # Narrower combo box
+        self.project_combo.currentTextChanged.connect(self.on_project_changed)
         project_layout.addWidget(project_label)
         project_layout.addWidget(self.project_combo)
         project_layout.addStretch()  # Push everything to the left
-        
+
         # Task Category selection
         category_layout = QHBoxLayout()
         category_layout.setSpacing(20)  # Add spacing between label and input
@@ -372,10 +377,11 @@ class ModernPomodoroWindow(QMainWindow):
         self.task_category_combo = QComboBox()
         self.task_category_combo.setObjectName("taskCategoryCombo")
         self.task_category_combo.setFixedWidth(250)  # Narrower combo box
+        self.task_category_combo.currentTextChanged.connect(self.on_category_changed)
         category_layout.addWidget(category_label)
         category_layout.addWidget(self.task_category_combo)
         category_layout.addStretch()  # Push everything to the left
-        
+
         # Task input
         task_layout = QHBoxLayout()
         task_layout.setSpacing(20)  # Add spacing between label and input
@@ -389,139 +395,139 @@ class ModernPomodoroWindow(QMainWindow):
         task_layout.addWidget(task_label)
         task_layout.addWidget(self.task_input)
         task_layout.addStretch()  # Push everything to the left
-        
+
         input_layout.addLayout(project_layout)
         input_layout.addLayout(category_layout)
         input_layout.addLayout(task_layout)
         layout.addWidget(input_frame)
-        
+
     def create_control_section(self, layout):
         """Create control buttons section"""
         control_frame = QFrame()
         control_frame.setObjectName("controlFrame")
         control_layout = QHBoxLayout(control_frame)
         control_layout.setSpacing(15)
-        
+
         # Start/Pause button
         self.start_button = QPushButton("Start Sprint")
         self.start_button.setObjectName("startButton")
         self.start_button.clicked.connect(self.toggle_timer)
-        
+
         # Stop button
         self.stop_button = QPushButton("Stop")
         self.stop_button.setObjectName("stopButton")
         self.stop_button.clicked.connect(self.stop_timer)
         self.stop_button.setEnabled(False)
-        
+
         # Complete button
         self.complete_button = QPushButton("Complete Sprint")
         self.complete_button.setObjectName("completeButton")
         self.complete_button.clicked.connect(self.complete_sprint)
         self.complete_button.setEnabled(False)
-        
+
         control_layout.addWidget(self.start_button)
         control_layout.addWidget(self.stop_button)
         control_layout.addWidget(self.complete_button)
         layout.addWidget(control_frame)
-        
+
     def create_status_section(self, layout):
         """Create status and statistics section"""
         status_frame = QFrame()
         status_frame.setObjectName("statusFrame")
         status_layout = QVBoxLayout(status_frame)
-        
+
         # Today's stats
         self.stats_label = QLabel("Today: 0 sprints completed")
         self.stats_label.setObjectName("statsLabel")
         self.stats_label.setAlignment(Qt.AlignCenter)
-        
+
         status_layout.addWidget(self.stats_label)
         layout.addWidget(status_frame)
-        
+
     def create_menu_bar(self):
         """Create menu bar with all application features"""
         menubar = self.menuBar()
-        
+
         # File menu
         file_menu = menubar.addMenu('File')
-        
+
         export_action = QAction('Export to Excel...', self)
         export_action.triggered.connect(self.export_to_excel)
         file_menu.addAction(export_action)
-        
+
         view_data_action = QAction('View Data...', self)
         view_data_action.triggered.connect(self.open_data_viewer)
         file_menu.addAction(view_data_action)
-        
+
         file_menu.addSeparator()
-        
+
         quit_action = QAction('Quit', self)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
-        
+
         # View menu
         view_menu = menubar.addMenu('View')
-        
+
         self.compact_action = QAction('Toggle Compact Mode', self)
         self.compact_action.triggered.connect(self.toggle_compact_mode)
         view_menu.addAction(self.compact_action)
-        
+
         # Tools menu
         tools_menu = menubar.addMenu('Tools')
-        
+
         projects_action = QAction('Activity Classifications...', self)
         projects_action.triggered.connect(self.manage_activity_classifications)
         tools_menu.addAction(projects_action)
-        
+
         settings_action = QAction('Settings...', self)
         settings_action.triggered.connect(self.open_settings)
         tools_menu.addAction(settings_action)
-        
+
     def load_settings(self):
         """Load saved settings from local config file"""
         from tracking.local_settings import get_local_settings
         settings = get_local_settings()
-        
+
         # Load theme setting
         self.theme_mode = settings.get("theme_mode", "light")
-        
+
         # Load timer durations
         sprint_duration = settings.get("sprint_duration", 25)
         break_duration = settings.get("break_duration", 5)
-        
+
         # Apply timer durations
         self.pomodoro_timer.set_durations(sprint_duration, break_duration)
-        
+
         # Load UI state
         self.auto_compact_mode = settings.get("auto_compact_mode", True)
         # Note: compact_mode is not loaded from settings - app always starts in normal mode
-        
+
     def apply_modern_styling(self, context="startup"):
         """Apply modern, colorful styling based on current mode"""
         self.theme_manager.apply_styling(context)
-    
+
     def apply_dialog_styling(self, dialog):
         """Apply current theme styling to a dialog"""
         self.theme_manager.apply_dialog_styling(dialog)
-    
+
     def apply_compact_styling(self):
         """Apply compact mode styling based on current theme"""
         self.theme_manager.apply_compact_styling()
-        
+
     def load_projects(self):
         """Load projects from database"""
         try:
             projects = self.db_manager.get_active_projects()
             self.project_combo.clear()
             debug_print(f"Found {len(projects)} active projects")
-            
+
             for project in projects:
                 # Use just the project name
                 display_name = project['name']
                 debug_print(f"Adding project: {display_name}")
                 trace_print(f"Project details: ID={project['id']}, Color={project['color']}, Active={project['active']}")
                 self.project_combo.addItem(display_name, project['id'])
-            
+
             if not projects:
                 debug_print("No projects found - default projects should have been created during initialization")
                 # Re-initialize defaults if somehow missing
@@ -531,33 +537,35 @@ class ModernPomodoroWindow(QMainWindow):
                 for project in projects:
                     display_name = project['name']
                     self.project_combo.addItem(display_name, project['id'])
-                
+
             debug_print(f"Project combo has {self.project_combo.count()} items")
-            
+
             # Set default selection to first project if available
             if self.project_combo.count() > 0:
                 self.project_combo.setCurrentIndex(0)
                 debug_print(f"Set default project selection: {self.project_combo.currentText()} (ID: {self.project_combo.currentData()})")
+                # Initialize tracking variable
+                self._last_project_text = self.project_combo.currentText()
         except Exception as e:
             error_print(f"Error loading projects: {e}")
             import traceback
             traceback.print_exc()
             # Add fallback option
             self.project_combo.addItem("Default Project", 1)
-    
+
     def load_task_categories(self):
         """Load task categories from database"""
         try:
             task_categories = self.db_manager.get_active_task_categories()
             self.task_category_combo.clear()
             debug_print(f"Found {len(task_categories)} active task categories")
-            
+
             for task_category in task_categories:
                 display_name = task_category['name']
                 debug_print(f"Adding task category: {display_name}")
                 trace_print(f"Task Category details: ID={task_category['id']}, Color={task_category['color']}, Active={task_category['active']}")
                 self.task_category_combo.addItem(display_name, task_category['id'])
-            
+
             if not task_categories:
                 debug_print("No task categories found - default task categories should have been created during initialization")
                 # Re-initialize defaults if somehow missing
@@ -567,31 +575,33 @@ class ModernPomodoroWindow(QMainWindow):
                 for task_category in task_categories:
                     display_name = task_category['name']
                     self.task_category_combo.addItem(display_name, task_category['id'])
-                
+
             debug_print(f"Task category combo has {self.task_category_combo.count()} items")
-            
+
             # Set default selection to first task category if available
             if self.task_category_combo.count() > 0:
                 self.task_category_combo.setCurrentIndex(0)
                 debug_print(f"Set default task category selection: {self.task_category_combo.currentText()} (ID: {self.task_category_combo.currentData()})")
+                # Initialize tracking variable
+                self._last_category_text = self.task_category_combo.currentText()
         except Exception as e:
             error_print(f"Error loading task categories: {e}")
             import traceback
             traceback.print_exc()
             # Add fallback option
             self.task_category_combo.addItem("Default Task Category", 1)
-            
+
     def toggle_timer(self):
         """Start or pause the timer"""
         debug_print(f"Toggle timer called, current state: {self.pomodoro_timer.state}")
         trace_print(f"Timer remaining: {self.pomodoro_timer.get_time_remaining()}s, Task: {self.current_task_description}")
-        
+
         if self.pomodoro_timer.state == TimerState.STOPPED:
             # Start new sprint
             self.current_project_id = self.project_combo.currentData()
             self.current_task_category_id = self.task_category_combo.currentData()
             self.current_task_description = self.task_input.text().strip() or None
-            
+
             debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
             self.qt_timer.start(1000)  # Update every second
@@ -600,11 +610,11 @@ class ModernPomodoroWindow(QMainWindow):
             self.complete_button.setEnabled(True)  # Enable complete button during timer
             self.sync_compact_buttons()  # Sync compact button states
             self.state_label.setText("Focus Time! 🎯")
-            
+
             # Auto-enter compact mode if enabled
             if self.auto_compact_mode and not self.compact_mode:
                 self.toggle_compact_mode()
-            
+
         elif self.pomodoro_timer.state == TimerState.RUNNING:
             # Pause
             debug_print("Pausing timer")
@@ -615,7 +625,7 @@ class ModernPomodoroWindow(QMainWindow):
             self.start_button.setText("Resume")
             self.sync_compact_buttons()  # Sync compact button states
             self.state_label.setText("Paused ⏸️")
-            
+
         elif self.pomodoro_timer.state == TimerState.PAUSED:
             # Resume
             debug_print("Resuming timer")
@@ -629,22 +639,22 @@ class ModernPomodoroWindow(QMainWindow):
             self.state_label.setText("Focus Time! 🎯")
             remaining_after = self.pomodoro_timer.get_time_remaining()
             debug_print(f"Time remaining after resume: {remaining_after}")
-            
+
             # Auto-enter compact mode if enabled
             if self.auto_compact_mode and not self.compact_mode:
                 self.toggle_compact_mode()
-                
+
         elif self.pomodoro_timer.state == TimerState.BREAK:
             # During break - end break and start new sprint
             debug_print("Ending break early and starting new sprint")
             self.pomodoro_timer.stop()  # Stop the break
             self.qt_timer.stop()
-            
+
             # Start new sprint
             self.current_project_id = self.project_combo.currentData()
             self.current_task_category_id = self.task_category_combo.currentData()
             self.current_task_description = self.task_input.text().strip() or None
-            
+
             debug_print(f"New sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
             self.qt_timer.start(1000)
@@ -653,79 +663,79 @@ class ModernPomodoroWindow(QMainWindow):
             self.complete_button.setEnabled(True)
             self.sync_compact_buttons()  # Sync compact button states
             self.state_label.setText("Focus Time! 🎯")
-            
+
             # Auto-enter compact mode if enabled
             if self.auto_compact_mode and not self.compact_mode:
                 self.toggle_compact_mode()
-            
+
     def stop_timer(self):
         """Stop the current timer"""
         self.pomodoro_timer.stop()
         self.qt_timer.stop()
         self.reset_ui()
-    
+
     def emit_sprint_complete(self):
         """Thread-safe method called from background timer thread"""
         self.sprint_completed.emit()
-    
+
     def handle_sprint_complete(self):
         """Main thread handler for sprint completion"""
         info_print("Sprint completed - playing alarm and starting break")
-        
+
         # Get alarm settings
         from tracking.local_settings import get_local_settings
         settings = get_local_settings()
         volume = settings.get("alarm_volume", 0.7)
         sprint_alarm = settings.get("sprint_alarm", "gentle_chime")
-        
+
         # Play sprint completion alarm
         from audio.alarm import play_alarm_sound
         import threading
-        
+
         def play_alarm():
             try:
                 play_alarm_sound(sprint_alarm, volume)
             except Exception as e:
                 print(f"Sprint alarm error: {e}")
-        
+
         # Play in separate thread to avoid blocking UI
         thread = threading.Thread(target=play_alarm, daemon=True)
         thread.start()
-        
+
         # Update UI to show break state (this happens automatically in timer)
         # The timer already transitions to BREAK state automatically
-    
+
     def emit_break_complete(self):
         """Thread-safe method called from background timer thread"""
         self.break_completed.emit()
-    
+
     def handle_break_complete(self):
         """Main thread handler for break completion"""
         info_print("Break completed - playing alarm and auto-completing sprint")
-        
+
         # Get alarm settings
         from tracking.local_settings import get_local_settings
         settings = get_local_settings()
         volume = settings.get("alarm_volume", 0.7)
         break_alarm = settings.get("break_alarm", "urgent_alert")
-        
+
         # Play break completion alarm
         from audio.alarm import play_alarm_sound
         import threading
-        
+
         def play_alarm():
             try:
                 play_alarm_sound(break_alarm, volume)
             except Exception as e:
                 print(f"Break alarm error: {e}")
-        
+
         # Play in separate thread to avoid blocking UI
         thread = threading.Thread(target=play_alarm, daemon=True)
         thread.start()
-        
+
         # Auto-complete the sprint (now safe to call from main thread)
         self.complete_sprint()
-        
+
     def complete_sprint(self):
         """Complete the current sprint"""
         debug_print("Complete sprint called!")
@@ -733,25 +743,25 @@ class ModernPomodoroWindow(QMainWindow):
         debug_print(f"Current task_description: '{self.current_task_description}'")
         debug_print(f"Timer state: {self.pomodoro_timer.get_state()}")
         debug_print(f"Timer remaining: {self.pomodoro_timer.get_time_remaining()}")
-        
+
         try:
             # Save sprint to database
             if self.current_project_id is not None:
                 debug_print(f"✓ Validation passed - saving sprint: {self.current_task_description} for project {self.current_project_id}")
-                
+
                 # Get project name from ID
                 project = self.db_manager.get_project_by_id(self.current_project_id)
                 project_name = project.name if project else "Unknown"
                 debug_print(f"Project name resolved: {project_name}")
-                
+
                 # Calculate actual start time based on timer duration
                 actual_duration = self.pomodoro_timer.sprint_duration - self.pomodoro_timer.get_time_remaining()
                 start_time = datetime.now() - timedelta(seconds=actual_duration)
                 debug_print(f"Calculated duration: {actual_duration}s, start_time: {start_time}")
-                
+
                 # Ensure task description is not None
                 task_desc = self.current_task_description or "Pomodoro Sprint"
-                
+
                 sprint = Sprint(
                     project_id=self.current_project_id,
                     task_category_id=self.current_task_category_id,
@@ -763,20 +773,20 @@ class ModernPomodoroWindow(QMainWindow):
                     planned_duration=int(self.pomodoro_timer.sprint_duration / 60)
                 )
                 debug_print(f"Created sprint object: {sprint.task_description}, duration: {actual_duration}s")
-                
+
                 # Save to database
                 debug_print("Calling db_manager.add_sprint()...")
                 self.db_manager.add_sprint(sprint)
                 info_print("✓ Sprint saved to database successfully")
-                
+
                 # Verify it was saved
                 from datetime import date
                 today_sprints = self.db_manager.get_sprints_by_date(date.today())
                 debug_print(f"Verification: {len(today_sprints)} sprints now in database for today")
-                
+
             else:
                 error_print(f"❌ Cannot save sprint - no project selected (project_id: {self.current_project_id})")
-            
+
             self.pomodoro_timer.stop()
             self.qt_timer.stop()
             self.reset_ui()
@@ -790,17 +800,17 @@ class ModernPomodoroWindow(QMainWindow):
             self.pomodoro_timer.stop()
             self.qt_timer.stop()
             self.reset_ui()
-            
+
     def update_display(self):
         """Update the timer display"""
         remaining = self.pomodoro_timer.get_time_remaining()
         state = self.pomodoro_timer.get_state()
-        
+
         # Update time display
         minutes = remaining // 60
         seconds = remaining % 60
         self.time_label.setText(f"{minutes:02d}:{seconds:02d}")
-        
+
         # Update progress bar based on current state
         if state == TimerState.RUNNING:
             total = self.pomodoro_timer.sprint_duration
@@ -819,11 +829,11 @@ class ModernPomodoroWindow(QMainWindow):
         elif state == TimerState.STOPPED:
             self.progress_bar.setValue(0)
             self.state_label.setText("Ready to focus! 🚀")
-            
+
         # Only stop Qt timer when completely stopped
         if state == TimerState.STOPPED and remaining <= 0:
             self.qt_timer.stop()
-            
+
     def reset_ui(self):
         """Reset UI to initial state"""
         self.start_button.setText("Start Sprint")
@@ -833,12 +843,12 @@ class ModernPomodoroWindow(QMainWindow):
         self.sync_compact_buttons()  # Sync compact button states
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)  # Ensure progress bar is visible
-        
+
         # Set timer display to current sprint duration
         sprint_minutes = self.pomodoro_timer.sprint_duration // 60
         self.time_label.setText(f"{sprint_minutes:02d}:00")
         self.state_label.setText("Ready to Focus")
-        
+
     def update_stats(self):
         """Update today's statistics"""
         try:
@@ -850,7 +860,7 @@ class ModernPomodoroWindow(QMainWindow):
             debug_print(f"Stats update: Found {count} sprints for {today}")
             for sprint in sprints:
                 debug_print(f"  - {sprint.task_description} at {sprint.start_time}")
-            
+
             stats_text = f"Today: {count} sprints completed"
             debug_print(f"Setting stats label to: '{stats_text}'")  # Debug
             self.stats_label.setText(stats_text)
@@ -859,20 +869,20 @@ class ModernPomodoroWindow(QMainWindow):
             error_print(f"Error updating stats: {e}")
             import traceback
             traceback.print_exc()
-            
+
     def toggle_compact_mode(self):
         """Toggle between normal and compact view"""
         self.compact_mode = not self.compact_mode
-        
+
         # Compact mode state is not saved - app always starts in normal mode
-        
+
         if self.compact_mode:
             # Enter compact mode
             self.enter_compact_mode()
         else:
             # Exit compact mode
             self.exit_compact_mode()
-    
+
     def enter_compact_mode(self):
         """Enter compact mode with minimal layout"""
         # Store current layout state for restoration
@@ -880,64 +890,64 @@ class ModernPomodoroWindow(QMainWindow):
         if timer_frame and timer_frame.layout():
             self._stored_spacing = timer_frame.layout().spacing()
             self._stored_margins = timer_frame.layout().contentsMargins()
-        
+
         # Hide everything except timer
         self.centralWidget().findChild(QFrame, "headerFrame").hide()
         self.centralWidget().findChild(QFrame, "inputFrame").hide()
         self.centralWidget().findChild(QFrame, "controlFrame").hide()
         self.centralWidget().findChild(QFrame, "statusFrame").hide()
-        
+
         # Show compact controls and sync their state
         self.compact_controls_frame.show()
         self.sync_compact_buttons()  # Ensure buttons show correct state for current timer
-        
+
         # Resize window first
         self.setFixedSize(*self.compact_size)
         self.compact_action.setText('Exit Compact Mode')
-        
+
         # Apply compact styling based on current theme
         self.apply_compact_styling()
-        
+
         # Adjust layout spacing for compact mode - minimize spacing for full-window blue area
         if timer_frame and timer_frame.layout():
             timer_frame.layout().setSpacing(1)  # Minimal spacing between elements
             timer_frame.layout().setContentsMargins(0, 0, 0, 0)  # No margins around content
-        
+
         # Remove main layout margins to let timer frame fill entire window
         main_layout = self.centralWidget().layout()
         if main_layout:
             self._stored_main_margins = main_layout.contentsMargins()  # Store for restoration
             main_layout.setContentsMargins(0, 0, 0, 0)  # No margins around main layout
             main_layout.setSpacing(0)  # No spacing between main layout elements
-            
+
     def exit_compact_mode(self):
         """Exit compact mode and restore normal layout"""
         # Hide compact controls
         self.compact_controls_frame.hide()
-        
+
         # Restore window size first
         self.setFixedSize(*self.normal_size)
         self.compact_action.setText('Toggle Compact Mode')
-        
+
         # Show all elements
         self.centralWidget().findChild(QFrame, "headerFrame").show()
         self.centralWidget().findChild(QFrame, "inputFrame").show()
         self.centralWidget().findChild(QFrame, "controlFrame").show()
         self.centralWidget().findChild(QFrame, "statusFrame").show()
-        
+
         # Restore layout spacing to stored values or defaults
         timer_frame = self.centralWidget().findChild(QFrame, "timerFrame")
         if timer_frame and timer_frame.layout():
             # Use stored values if available, otherwise use defaults
             spacing = getattr(self, '_stored_spacing', 10)
             margins = getattr(self, '_stored_margins', None)
-            
+
             timer_frame.layout().setSpacing(spacing)
             if margins:
                 timer_frame.layout().setContentsMargins(margins)
             else:
                 timer_frame.layout().setContentsMargins(11, 11, 11, 11)
-        
+
         # Restore main layout margins
         main_layout = self.centralWidget().layout()
         if main_layout:
@@ -947,37 +957,37 @@ class ModernPomodoroWindow(QMainWindow):
             else:
                 main_layout.setContentsMargins(25, 25, 25, 25)  # Default margins
             main_layout.setSpacing(5)  # Default spacing
-        
+
         # Reapply normal styling completely
         self.apply_modern_styling()
-        
+
         # Force layout update to prevent corruption
         self.centralWidget().updateGeometry()
         self.update()
         self.repaint()
-            
+
     def export_to_excel(self):
         """Export data to Excel file"""
         from PySide6.QtWidgets import QFileDialog, QMessageBox
         try:
             # Get save location
             file_path, _ = QFileDialog.getSaveFileName(
-                self, 
-                "Export to Excel", 
+                self,
+                "Export to Excel",
                 f"pomodora_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 "Excel Files (*.xlsx)"
             )
-            
+
             if file_path:
                 from tracking.excel_export import ExcelExporter
                 exporter = ExcelExporter(self.db_manager)
                 exporter.export_all_data(file_path)
-                
-                QMessageBox.information(self, "Export Complete", 
+
+                QMessageBox.information(self, "Export Complete",
                                       f"Data exported successfully to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{str(e)}")
-            
+
     def open_data_viewer(self):
         """Open data viewer window"""
         try:
@@ -987,25 +997,25 @@ class ModernPomodoroWindow(QMainWindow):
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error", f"Failed to open data viewer:\n{str(e)}")
-            
+
     def manage_activity_classifications(self):
         """Open comprehensive activity classifications dialog"""
         dialog = ActivityClassificationsDialog(self, self.db_manager)
         if dialog.exec():
             self.load_projects()
-            
+
     def open_settings(self):
         """Open settings dialog with theme, timer, and database options"""
         dialog = SettingsDialog(self)
         dialog.exec()
-        
+
         # Refresh UI state after settings dialog closes
         self.refresh_ui_state()
-    
+
     def refresh_ui_state(self):
         """Refresh UI elements to match current timer state"""
         timer_state = self.pomodoro_timer.get_state()
-        
+
         if timer_state == TimerState.STOPPED:
             self.start_button.setText("Start")
             self.stop_button.setEnabled(False)
@@ -1027,25 +1037,65 @@ class ModernPomodoroWindow(QMainWindow):
             self.complete_button.setEnabled(False)
             self.state_label.setText("Break Time! ☕")
 
+    def on_project_changed(self, project_text):
+        """Handle project field changes - if project exists as category, set category to match"""
+        if not project_text:
+            return
+        
+        # Rule 1: If a project is selected that exists as a category, automatically set category to match
+        for i in range(self.task_category_combo.count()):
+            if self.task_category_combo.itemText(i) == project_text:
+                # Found matching category - update category to match project
+                # Temporarily disconnect to avoid recursion
+                self.task_category_combo.currentTextChanged.disconnect()
+                self.task_category_combo.setCurrentIndex(i)
+                self.task_category_combo.currentTextChanged.connect(self.on_category_changed)
+                break
+        
+        # Update tracking
+        self._last_project_text = project_text
+
+    def on_category_changed(self, category_text):
+        """Handle category field changes - if project and category were matching, update project to match new category"""
+        if not category_text:
+            return
+        
+        # Rule 2: If project and category field were matching and category is changed, update project to match
+        # Check if they were matching before this change
+        if self._last_project_text == self._last_category_text:
+            # They were matching, so sync project to new category value
+            for i in range(self.project_combo.count()):
+                if self.project_combo.itemText(i) == category_text:
+                    # Found matching project - update project to match category
+                    # Temporarily disconnect to avoid recursion
+                    self.project_combo.currentTextChanged.disconnect()
+                    self.project_combo.setCurrentIndex(i)
+                    self.project_combo.currentTextChanged.connect(self.on_project_changed)
+                    self._last_project_text = category_text  # Update tracking
+                    break
+        
+        # Update tracking
+        self._last_category_text = category_text
+
 
 def main():
     """Main application entry point"""
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Modern style
-    
+
     # Set application properties for proper macOS menu bar display
     app.setApplicationName("Pomodora")
     app.setApplicationDisplayName("Pomodora")
     app.setApplicationVersion("1.0")
     app.setOrganizationName("Pomodora")
     app.setOrganizationDomain("pomodora.app")
-    
+
     try:
         window = ModernPomodoroWindow()
         window.show()
-        
+
         result = app.exec()
-        
+
         # More graceful cleanup to prevent segfault
         debug_print("Application exiting...")
         if window:
@@ -1053,10 +1103,10 @@ def main():
             window.close() # Then close
             window.deleteLater()  # Schedule for deletion
             del window
-        
+
         app.processEvents()  # Process any remaining events
         app.quit()
-        
+
         sys.exit(result)
     except Exception as e:
         print(f"Application error: {e}")
