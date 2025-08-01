@@ -6,7 +6,7 @@ A modern cross-platform GUI application for Pomodoro technique activity tracking
 
 ### Timer & Audio
 - **Automatic Timer Flow**: Sprint → Alarm → Break → Alarm → Auto-complete
-- **Customizable Durations**: Sprint (1-60 min), Break (1-30 min) 
+- **Customizable Durations**: Sprint (1-60 min), Break (1-30 min)
 - **Rich Audio System**: Generated tones, system sounds, and custom sound files
 - **Dual Alarms**: Separate configurable sounds for sprint and break completion
 - **Volume Control**: Adjustable alarm volume with test buttons
@@ -93,7 +93,7 @@ python src/main.py
 
 # Run with different logging levels (for troubleshooting)
 python src/main.py -v          # Info: basic status messages
-python src/main.py -vv         # Debug: detailed debugging info  
+python src/main.py -vv         # Debug: detailed debugging info
 python src/main.py -vvv        # Trace: very detailed tracing
 
 # Run in silent mode (disable audio alarms)
@@ -185,7 +185,7 @@ pomodora/
 │       ├── models.py               # SQLAlchemy database models
 │       ├── local_settings.py      # Local configuration management
 │       └── google_drive.py         # Google Drive API integration
-├── requirements.txt                # Python dependencies  
+├── requirements.txt                # Python dependencies
 ├── CLAUDE.md                      # Development documentation
 └── README.md                      # User documentation
 ```

@@ -88,7 +88,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.current_project_id = None
         self.current_task_category_id = None
         self.current_task_description = None
-        
+
         # Field synchronization tracking
         self._last_project_text = ""
         self._last_category_text = ""
@@ -1041,7 +1041,7 @@ class ModernPomodoroWindow(QMainWindow):
         """Handle project field changes - if project exists as category, set category to match"""
         if not project_text:
             return
-        
+
         # Rule 1: If a project is selected that exists as a category, automatically set category to match
         for i in range(self.task_category_combo.count()):
             if self.task_category_combo.itemText(i) == project_text:
@@ -1051,7 +1051,7 @@ class ModernPomodoroWindow(QMainWindow):
                 self.task_category_combo.setCurrentIndex(i)
                 self.task_category_combo.currentTextChanged.connect(self.on_category_changed)
                 break
-        
+
         # Update tracking
         self._last_project_text = project_text
 
@@ -1059,7 +1059,7 @@ class ModernPomodoroWindow(QMainWindow):
         """Handle category field changes - if project and category were matching, update project to match new category"""
         if not category_text:
             return
-        
+
         # Rule 2: If project and category field were matching and category is changed, update project to match
         # Check if they were matching before this change
         if self._last_project_text == self._last_category_text:
@@ -1073,7 +1073,7 @@ class ModernPomodoroWindow(QMainWindow):
                     self.project_combo.currentTextChanged.connect(self.on_project_changed)
                     self._last_project_text = category_text  # Update tracking
                     break
-        
+
         # Update tracking
         self._last_category_text = category_text
 
