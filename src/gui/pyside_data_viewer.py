@@ -371,7 +371,8 @@ class PySideDataViewerWindow(QWidget):
         """Get sprints for the current period"""
         session = self.db_manager.get_session()
         try:
-            from tracking.models import Sprint
+            from tracking.models import Sprint, Project, TaskCategory
+            from sqlalchemy.orm import joinedload
 
             if self.current_filter == "day":
                 start_date = datetime.combine(self.current_date, datetime.min.time())
@@ -392,10 +393,38 @@ class PySideDataViewerWindow(QWidget):
                     next_month = start_date.replace(month=start_date.month + 1)
                 end_date = next_month
 
-            return session.query(Sprint).filter(
+            # Eager load related objects to avoid lazy loading issues
+            sprints = session.query(Sprint).options(
+                joinedload(Sprint.project),
+                joinedload(Sprint.task_category)
+            ).filter(
                 Sprint.start_time >= start_date,
                 Sprint.start_time < end_date
-            ).order_by(Sprint.start_time.desc()).all()
+            ).order_by(Sprint.start_time.asc()).all()
+            
+            # Create detached objects with all data loaded
+            detached_sprints = []
+            for sprint in sprints:
+                # Access all lazy-loaded attributes while session is active
+                project_name = sprint.project.name if sprint.project else "Unknown Project"
+                task_category_name = sprint.task_category.name if sprint.task_category else "Unknown Category"
+                
+                # Create a simple data object to avoid session dependency
+                sprint_data = type('SprintData', (), {
+                    'id': sprint.id,
+                    'start_time': sprint.start_time,
+                    'end_time': sprint.end_time,
+                    'task_description': sprint.task_description,
+                    'completed': sprint.completed,
+                    'interrupted': sprint.interrupted,
+                    'duration_minutes': sprint.duration_minutes,
+                    'project_name': project_name,
+                    'task_category_name': task_category_name
+                })()
+                
+                detached_sprints.append(sprint_data)
+            
+            return detached_sprints
 
         finally:
             session.close()
@@ -480,9 +509,12 @@ class PySideDataViewerWindow(QWidget):
 <ul>
 """
 
-        for project, count in sorted(projects.items(), key=lambda x: x[1], reverse=True):
-            percentage = (count / total_sprints * 100) if total_sprints > 0 else 0
-            summary_text += f"<li><b>{project}:</b> {count} sprints ({percentage:.1f}%)</li>\n"
+        if projects:
+            for project, count in sorted(projects.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_sprints * 100) if total_sprints > 0 else 0
+                summary_text += f"<li><b>{project}:</b> {count} sprints ({percentage:.1f}%)</li>\n"
+        else:
+            summary_text += "<li><i>No projects found</i></li>\n"
 
         summary_text += "</ul>"
 
