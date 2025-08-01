@@ -94,7 +94,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.auto_compact_mode = True  # Auto-enter compact mode on sprint start
         self.theme_mode = "light"  # light, dark, or system
         self.normal_size = (500, 680)
-        self.compact_size = (280, 140)
+        self.compact_size = (300, 180)  # Increased size for better visibility
         
         # Initialize theme manager
         self.theme_manager = ThemeManager(self)
@@ -106,6 +106,10 @@ class ModernPomodoroWindow(QMainWindow):
         self.load_projects()
         self.load_task_categories()
         self.reset_ui()
+        
+        # Ensure proper initial layout geometry
+        self.centralWidget().updateGeometry()
+        self.update()
         
         # App always starts in normal mode - compact mode only activated by auto-compact or manual toggle
         
@@ -158,7 +162,7 @@ class ModernPomodoroWindow(QMainWindow):
     def init_ui(self):
         """Initialize the modern UI layout"""
         self.setWindowTitle("Pomodora - Modern Pomodoro Timer")
-        self.setFixedSize(500, 500)
+        self.setFixedSize(*self.normal_size)  # Use the defined normal size
         
         # Central widget and main layout
         central_widget = QWidget()
@@ -202,8 +206,8 @@ class ModernPomodoroWindow(QMainWindow):
         timer_frame.setFrameStyle(QFrame.StyledPanel)  # Ensure proper frame boundaries
         timer_layout = QVBoxLayout(timer_frame)
         timer_layout.setAlignment(Qt.AlignCenter)
-        timer_layout.setSpacing(8)
-        timer_layout.setContentsMargins(15, 15, 15, 15)
+        timer_layout.setSpacing(10)
+        timer_layout.setContentsMargins(11, 11, 11, 11)
         
         # Timer display
         self.time_label = QLabel("25:00")
@@ -224,10 +228,70 @@ class ModernPomodoroWindow(QMainWindow):
         self.progress_bar.setFixedHeight(8)
         self.progress_bar.setVisible(True)  # Ensure it's visible
         
+        # Create compact control buttons (initially hidden)
+        self.compact_controls_frame = QFrame()
+        self.compact_controls_frame.setObjectName("compactControlsFrame")
+        compact_controls_layout = QHBoxLayout(self.compact_controls_frame)
+        compact_controls_layout.setSpacing(8)  # Smaller spacing for compact mode
+        compact_controls_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Compact Start/Pause button
+        self.compact_start_button = QPushButton("Start")
+        self.compact_start_button.setObjectName("compactStartButton")
+        self.compact_start_button.clicked.connect(self.toggle_timer)
+        self.compact_start_button.setFixedSize(60, 24)  # Smaller size for compact mode
+        
+        # Compact Stop button
+        self.compact_stop_button = QPushButton("Stop")
+        self.compact_stop_button.setObjectName("compactStopButton")
+        self.compact_stop_button.clicked.connect(self.stop_timer)
+        self.compact_stop_button.setEnabled(False)
+        self.compact_stop_button.setFixedSize(50, 24)  # Smaller size for compact mode
+        
+        # Compact Complete button
+        self.compact_complete_button = QPushButton("Done")
+        self.compact_complete_button.setObjectName("compactCompleteButton")
+        self.compact_complete_button.clicked.connect(self.complete_sprint)
+        self.compact_complete_button.setEnabled(False)
+        self.compact_complete_button.setFixedSize(50, 24)  # Smaller size for compact mode
+        
+        compact_controls_layout.addWidget(self.compact_start_button)
+        compact_controls_layout.addWidget(self.compact_stop_button)
+        compact_controls_layout.addWidget(self.compact_complete_button)
+        
+        # Add to timer layout
         timer_layout.addWidget(self.time_label)
         timer_layout.addWidget(self.state_label)
         timer_layout.addWidget(self.progress_bar)
+        timer_layout.addWidget(self.compact_controls_frame)
+        
+        # Hide compact controls initially (only shown in compact mode)
+        self.compact_controls_frame.hide()
+        
         layout.addWidget(timer_frame)
+    
+    def sync_compact_buttons(self):
+        """Synchronize compact button states with main control buttons"""
+        # In compact mode, only show controls for active sprints
+        main_text = self.start_button.text()
+        
+        if "Start" in main_text:
+            # Hide start button in compact mode - user needs to use main interface to start new sprints
+            self.compact_start_button.hide()
+            self.compact_stop_button.setEnabled(False)
+            self.compact_complete_button.setEnabled(False)
+        elif "Pause" in main_text:
+            self.compact_start_button.show()
+            self.compact_start_button.setText("Pause")
+            self.compact_start_button.setEnabled(True)
+            self.compact_stop_button.setEnabled(True)
+            self.compact_complete_button.setEnabled(True)
+        elif "Resume" in main_text:
+            self.compact_start_button.show()
+            self.compact_start_button.setText("Resume")
+            self.compact_start_button.setEnabled(True)
+            self.compact_stop_button.setEnabled(True)
+            self.compact_complete_button.setEnabled(True)
         
         
     def create_input_section(self, layout):
@@ -487,6 +551,7 @@ class ModernPomodoroWindow(QMainWindow):
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)
             self.complete_button.setEnabled(True)  # Enable complete button during timer
+            self.sync_compact_buttons()  # Sync compact button states
             self.state_label.setText("Focus Time! 🎯")
             
             # Auto-enter compact mode if enabled
@@ -501,6 +566,7 @@ class ModernPomodoroWindow(QMainWindow):
             self.pomodoro_timer.pause()
             self.qt_timer.stop()
             self.start_button.setText("Resume")
+            self.sync_compact_buttons()  # Sync compact button states
             self.state_label.setText("Paused ⏸️")
             
         elif self.pomodoro_timer.state == TimerState.PAUSED:
@@ -512,9 +578,34 @@ class ModernPomodoroWindow(QMainWindow):
             self.qt_timer.start(1000)
             self.start_button.setText("Pause")
             self.complete_button.setEnabled(True)  # Keep complete button enabled
+            self.sync_compact_buttons()  # Sync compact button states
             self.state_label.setText("Focus Time! 🎯")
             remaining_after = self.pomodoro_timer.get_time_remaining()
             debug_print(f"Time remaining after resume: {remaining_after}")
+            
+            # Auto-enter compact mode if enabled
+            if self.auto_compact_mode and not self.compact_mode:
+                self.toggle_compact_mode()
+                
+        elif self.pomodoro_timer.state == TimerState.BREAK:
+            # During break - end break and start new sprint
+            debug_print("Ending break early and starting new sprint")
+            self.pomodoro_timer.stop()  # Stop the break
+            self.qt_timer.stop()
+            
+            # Start new sprint
+            self.current_project_id = self.project_combo.currentData()
+            self.current_task_category_id = self.task_category_combo.currentData()
+            self.current_task_description = self.task_input.text().strip() or None
+            
+            debug_print(f"New sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
+            self.pomodoro_timer.start_sprint()
+            self.qt_timer.start(1000)
+            self.start_button.setText("Pause")
+            self.stop_button.setEnabled(True)
+            self.complete_button.setEnabled(True)
+            self.sync_compact_buttons()  # Sync compact button states
+            self.state_label.setText("Focus Time! 🎯")
             
             # Auto-enter compact mode if enabled
             if self.auto_compact_mode and not self.compact_mode:
@@ -692,6 +783,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.complete_button.setEnabled(False)
+        self.sync_compact_buttons()  # Sync compact button states
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)  # Ensure progress bar is visible
         
@@ -736,11 +828,21 @@ class ModernPomodoroWindow(QMainWindow):
     
     def enter_compact_mode(self):
         """Enter compact mode with minimal layout"""
+        # Store current layout state for restoration
+        timer_frame = self.centralWidget().findChild(QFrame, "timerFrame")
+        if timer_frame and timer_frame.layout():
+            self._stored_spacing = timer_frame.layout().spacing()
+            self._stored_margins = timer_frame.layout().contentsMargins()
+        
         # Hide everything except timer
         self.centralWidget().findChild(QFrame, "headerFrame").hide()
         self.centralWidget().findChild(QFrame, "inputFrame").hide()
         self.centralWidget().findChild(QFrame, "controlFrame").hide()
         self.centralWidget().findChild(QFrame, "statusFrame").hide()
+        
+        # Show compact controls and sync their state
+        self.compact_controls_frame.show()
+        self.sync_compact_buttons()  # Ensure buttons show correct state for current timer
         
         # Resize window first
         self.setFixedSize(*self.compact_size)
@@ -749,14 +851,23 @@ class ModernPomodoroWindow(QMainWindow):
         # Apply compact styling based on current theme
         self.apply_compact_styling()
         
-        # Adjust layout spacing for compact mode
-        timer_frame = self.centralWidget().findChild(QFrame, "timerFrame")
+        # Adjust layout spacing for compact mode - minimize spacing for full-window blue area
         if timer_frame and timer_frame.layout():
-            timer_frame.layout().setSpacing(2)
-            timer_frame.layout().setContentsMargins(8, 6, 8, 6)
+            timer_frame.layout().setSpacing(1)  # Minimal spacing between elements
+            timer_frame.layout().setContentsMargins(0, 0, 0, 0)  # No margins around content
+        
+        # Remove main layout margins to let timer frame fill entire window
+        main_layout = self.centralWidget().layout()
+        if main_layout:
+            self._stored_main_margins = main_layout.contentsMargins()  # Store for restoration
+            main_layout.setContentsMargins(0, 0, 0, 0)  # No margins around main layout
+            main_layout.setSpacing(0)  # No spacing between main layout elements
             
     def exit_compact_mode(self):
         """Exit compact mode and restore normal layout"""
+        # Hide compact controls
+        self.compact_controls_frame.hide()
+        
         # Restore window size first
         self.setFixedSize(*self.normal_size)
         self.compact_action.setText('Toggle Compact Mode')
@@ -767,16 +878,34 @@ class ModernPomodoroWindow(QMainWindow):
         self.centralWidget().findChild(QFrame, "controlFrame").show()
         self.centralWidget().findChild(QFrame, "statusFrame").show()
         
-        # Restore layout spacing
+        # Restore layout spacing to stored values or defaults
         timer_frame = self.centralWidget().findChild(QFrame, "timerFrame")
         if timer_frame and timer_frame.layout():
-            timer_frame.layout().setSpacing(10)
-            timer_frame.layout().setContentsMargins(11, 11, 11, 11)
+            # Use stored values if available, otherwise use defaults
+            spacing = getattr(self, '_stored_spacing', 10)
+            margins = getattr(self, '_stored_margins', None)
+            
+            timer_frame.layout().setSpacing(spacing)
+            if margins:
+                timer_frame.layout().setContentsMargins(margins)
+            else:
+                timer_frame.layout().setContentsMargins(11, 11, 11, 11)
+        
+        # Restore main layout margins
+        main_layout = self.centralWidget().layout()
+        if main_layout:
+            stored_main_margins = getattr(self, '_stored_main_margins', None)
+            if stored_main_margins:
+                main_layout.setContentsMargins(stored_main_margins)
+            else:
+                main_layout.setContentsMargins(25, 25, 25, 25)  # Default margins
+            main_layout.setSpacing(5)  # Default spacing
         
         # Reapply normal styling completely
         self.apply_modern_styling()
         
-        # Force update to ensure everything displays correctly
+        # Force layout update to prevent corruption
+        self.centralWidget().updateGeometry()
         self.update()
         self.repaint()
             

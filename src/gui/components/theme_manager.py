@@ -1149,11 +1149,10 @@ class ThemeManager:
         #timerFrame {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                 stop:0 #87ceeb, stop:1 #4682b4);
-            border-radius: 12px;
-            padding: 8px;
-            margin: 3px;
-            min-height: 70px;
-            max-height: 80px;
+            border-radius: 0px;  /* No rounded corners for full window */
+            padding: 8px;        /* Minimal internal padding */
+            margin: 0px;         /* No external margins */
+            min-height: 100%;    /* Fill entire window height */
         }
         
         #timeLabel {
@@ -1186,6 +1185,87 @@ class ThemeManager:
                 stop:0 #56ab2f, stop:1 #a8e6cf);
             border-radius: 2px;
         }
+        
+        /* Compact Control Buttons */
+        #compactControlsFrame {
+            background: transparent;
+            margin: 2px 0;
+        }
+        
+        #compactStartButton {
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid #45a049;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #4CAF50, stop:1 #45a049);
+            color: white;
+            margin: 0 2px;
+            min-width: 50px;
+        }
+        
+        #compactStopButton {
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid #da190b;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #f44336, stop:1 #da190b);
+            color: white;
+            margin: 0 2px;
+            min-width: 40px;
+        }
+        
+        #compactCompleteButton {
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid #0b7dda;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #2196F3, stop:1 #0b7dda);
+            color: white;
+            margin: 0 2px;
+            min-width: 40px;
+        }
+        
+        #compactStartButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #66BB6A, stop:1 #4CAF50);
+            border: 2px solid #4CAF50;
+        }
+        
+        #compactStopButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #f66359, stop:1 #f44336);
+            border: 2px solid #f44336;
+        }
+        
+        #compactCompleteButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #42A5F5, stop:1 #2196F3);
+            border: 2px solid #2196F3;
+        }
+        
+        #compactStartButton:pressed {
+            background: #45a049;
+        }
+        
+        #compactStopButton:pressed {
+            background: #da190b;
+        }
+        
+        #compactCompleteButton:pressed {
+            background: #0b7dda;
+        }
+        
+        #compactStartButton:disabled, #compactStopButton:disabled, #compactCompleteButton:disabled {
+            background: #bdc3c7;
+            color: #7f8c8d;
+            border: 2px solid #95a5a6;
+        }
         """
         self.main_window.setStyleSheet(compact_style)
     
@@ -1199,12 +1279,11 @@ class ThemeManager:
         #timerFrame {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                 stop:0 #2980b9, stop:1 #1f4e79);
-            border-radius: 12px;
-            padding: 8px;
-            margin: 3px;
-            min-height: 70px;
-            max-height: 80px;
-            border: 2px solid #3498db;
+            border-radius: 0px;  /* No rounded corners for full window */
+            padding: 8px;        /* Minimal internal padding */
+            margin: 0px;         /* No external margins */
+            min-height: 100%;    /* Fill entire window height */
+            border: none;        /* No border for seamless fill */
         }
         
         #timeLabel {
@@ -1236,6 +1315,87 @@ class ThemeManager:
             background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                 stop:0 #5d6d7e, stop:1 #7f8c8d);
             border-radius: 2px;
+        }
+        
+        /* Compact Control Buttons */
+        #compactControlsFrame {
+            background: transparent;
+            margin: 2px 0;
+        }
+        
+        #compactStartButton {
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid #229954;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #27ae60, stop:1 #229954);
+            color: white;
+            margin: 0 2px;
+            min-width: 50px;
+        }
+        
+        #compactStopButton {
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid #c0392b;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #e74c3c, stop:1 #c0392b);
+            color: white;
+            margin: 0 2px;
+            min-width: 40px;
+        }
+        
+        #compactCompleteButton {
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid #2980b9;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #3498db, stop:1 #2980b9);
+            color: white;
+            margin: 0 2px;
+            min-width: 40px;
+        }
+        
+        #compactStartButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #2ecc71, stop:1 #27ae60);
+            border: 2px solid #27ae60;
+        }
+        
+        #compactStopButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #ec7063, stop:1 #e74c3c);
+            border: 2px solid #e74c3c;
+        }
+        
+        #compactCompleteButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #5dade2, stop:1 #3498db);
+            border: 2px solid #3498db;
+        }
+        
+        #compactStartButton:pressed {
+            background: #229954;
+        }
+        
+        #compactStopButton:pressed {
+            background: #c0392b;
+        }
+        
+        #compactCompleteButton:pressed {
+            background: #2980b9;
+        }
+        
+        #compactStartButton:disabled, #compactStopButton:disabled, #compactCompleteButton:disabled {
+            background: #566573;
+            color: #85929e;
+            border: 2px solid #5d6d7e;
         }
         """
         self.main_window.setStyleSheet(compact_style)
