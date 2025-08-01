@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem,
                                QComboBox, QDateEdit, QTabWidget, QFrame,
-                               QHeaderView, QMessageBox, QFileDialog)
+                               QHeaderView, QMessageBox, QFileDialog, QScrollArea)
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QFont
 from datetime import datetime, timedelta, date
@@ -142,7 +142,13 @@ class PySideDataViewerWindow(QWidget):
         summary_widget = QWidget()
         summary_layout = QVBoxLayout(summary_widget)
 
-        # Summary frame
+        # Create scroll area for the summary content
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Summary frame (this will be inside the scroll area)
         self.summary_frame = QFrame()
         self.summary_frame.setObjectName("summaryFrame")
         summary_frame_layout = QVBoxLayout(self.summary_frame)
@@ -151,9 +157,13 @@ class PySideDataViewerWindow(QWidget):
         self.summary_label.setObjectName("summaryText")
         self.summary_label.setAlignment(Qt.AlignTop)
         self.summary_label.setWordWrap(True)
+        self.summary_label.setTextFormat(Qt.RichText)  # Enable HTML rendering
 
         summary_frame_layout.addWidget(self.summary_label)
-        summary_layout.addWidget(self.summary_frame)
+        
+        # Put the summary frame inside the scroll area
+        scroll_area.setWidget(self.summary_frame)
+        summary_layout.addWidget(scroll_area)
 
         self.tab_widget.addTab(summary_widget, "📈 Summary")
 
