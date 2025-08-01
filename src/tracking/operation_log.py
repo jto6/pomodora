@@ -18,31 +18,31 @@ except ImportError:
 
 class OperationType(Enum):
     INSERT = "INSERT"
-    UPDATE = "UPDATE" 
+    UPDATE = "UPDATE"
     DELETE = "DELETE"
 
 class OperationTracker:
     """Tracks and manages database operations for merge synchronization using in-memory storage"""
-    
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         # Use in-memory list instead of database table
         self.pending_operations = []
         debug_print("In-memory operation tracker initialized")
-    
+
     def log_insert(self, table_name: str, record_id: int, record_data: dict):
         """Log an INSERT operation"""
         self._log_operation(OperationType.INSERT, table_name, record_id, record_data)
-    
+
     def log_update(self, table_name: str, record_id: int, old_data: dict, new_data: dict):
         """Log an UPDATE operation"""
         self._log_operation(OperationType.UPDATE, table_name, record_id, new_data, old_data)
-    
+
     def log_delete(self, table_name: str, record_id: int, record_data: dict):
         """Log a DELETE operation"""
         self._log_operation(OperationType.DELETE, table_name, record_id, old_data=record_data)
-    
-    def _log_operation(self, op_type: OperationType, table_name: str, record_id: int, 
+
+    def _log_operation(self, op_type: OperationType, table_name: str, record_id: int,
                       record_data: dict = None, old_data: dict = None):
         """Internal method to log an operation in memory"""
         try:
@@ -56,13 +56,13 @@ class OperationTracker:
                 'old_data': json.dumps(old_data) if old_data else None,
                 'timestamp': datetime.utcnow()
             }
-            
+
             self.pending_operations.append(operation)
             debug_print(f"Logged {op_type.value} on {table_name}[{record_id}] (in-memory)")
-            
+
         except Exception as e:
             error_print(f"Failed to log operation {op_type.value} on {table_name}[{record_id}]: {e}")
-    
+
     def get_unsynced_operations(self):
         """Get all pending operations, ordered by timestamp"""
         try:
@@ -73,7 +73,7 @@ class OperationTracker:
         except Exception as e:
             error_print(f"Failed to get pending operations: {e}")
             return []
-    
+
     def mark_operations_synced(self, operation_ids: list):
         """Mark operations as synced (remove from memory)"""
         try:
@@ -84,7 +84,7 @@ class OperationTracker:
             info_print(f"Cleared {synced_count} synced operations from memory")
         except Exception as e:
             error_print(f"Failed to clear synced operations: {e}")
-    
+
     def cleanup_old_operations(self, days_to_keep: int = 30):
         """No-op: in-memory operations are automatically cleaned up when synced"""
         pass
@@ -92,13 +92,13 @@ class OperationTracker:
 
 class DatabaseMerger:
     """Handles merging local operations with remote database"""
-    
+
     def __init__(self, local_db_path: str, remote_db_path: str, local_tracker: OperationTracker = None):
         self.local_db_path = local_db_path
         self.remote_db_path = remote_db_path
         # Use existing tracker if provided, otherwise create new one
         self.local_tracker = local_tracker or OperationTracker(local_db_path)
-        
+
     def merge_databases(self) -> bool:
         """
         Merge local operations into remote database
@@ -106,23 +106,23 @@ class DatabaseMerger:
         """
         try:
             info_print("Starting database merge operation")
-            
+
             # Get all unsynced local operations
             unsynced_ops = self.local_tracker.get_unsynced_operations()
             if not unsynced_ops:
                 info_print("No local operations to merge")
                 return True
-            
+
             info_print(f"Merging {len(unsynced_ops)} local operations into remote database")
-            
+
             # Note: Remote database should already have the correct foreign key schema
             # The local and remote databases now both use the same modern schema
-            
+
             # Apply operations to remote database
             remote_engine = create_engine(f'sqlite:///{self.remote_db_path}')
             RemoteSession = sessionmaker(bind=remote_engine)
             remote_session = RemoteSession()
-            
+
             try:
                 applied_ops = []
                 for op in unsynced_ops:
@@ -132,37 +132,37 @@ class DatabaseMerger:
                         error_print(f"Failed to apply operation {op['id']}, stopping merge")
                         remote_session.rollback()
                         return False
-                
+
                 # Commit all changes to remote database
                 remote_session.commit()
                 info_print(f"Successfully applied {len(applied_ops)} operations to remote database")
-                
+
                 # Mark operations as synced in local database
                 if applied_ops:
                     self.local_tracker.mark_operations_synced(applied_ops)
-                
+
                 return True
-                
+
             except Exception as e:
                 remote_session.rollback()
                 error_print(f"Error during merge operation: {e}")
                 return False
             finally:
                 remote_session.close()
-                
+
         except Exception as e:
             error_print(f"Failed to merge databases: {e}")
             return False
-    
+
     def _apply_operation_to_remote(self, remote_session, operation: dict) -> bool:
         """Apply a single operation to the remote database"""
         try:
             table_name = operation['table_name']
             record_id = operation['record_id']
             op_type = operation['operation_type']
-            
+
             debug_print(f"Applying {op_type} operation on {table_name}[{record_id}]")
-            
+
             if op_type == OperationType.INSERT.value:
                 return self._apply_insert(remote_session, table_name, record_id, operation['record_data'])
             elif op_type == OperationType.UPDATE.value:
@@ -172,31 +172,31 @@ class DatabaseMerger:
             else:
                 error_print(f"Unknown operation type: {op_type}")
                 return False
-                
+
         except Exception as e:
             error_print(f"Failed to apply operation {operation['id']}: {e}")
             return False
-    
+
     def _apply_insert(self, remote_session, table_name: str, record_id: int, record_data_json: str) -> bool:
         """Apply INSERT operation to remote database"""
         try:
             record_data = json.loads(record_data_json)
-            
+
             # Check if record already exists (conflict resolution)
             existing = remote_session.execute(
                 text(f"SELECT id FROM {table_name} WHERE id = :id"),
                 {"id": record_id}
             ).fetchone()
-            
+
             if existing:
                 debug_print(f"Record {table_name}[{record_id}] already exists in remote, skipping INSERT")
                 return True
-            
+
             # Build INSERT query
             columns = list(record_data.keys())
             placeholders = [f":{col}" for col in columns]
             query = text(f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})")
-            
+
             # Handle datetime conversion for SQLite
             processed_data = record_data.copy()
             for key, value in processed_data.items():
@@ -206,46 +206,46 @@ class DatabaseMerger:
                 elif key.endswith('_time') and isinstance(value, str):
                     # Keep ISO format datetime strings as-is for SQLite
                     pass
-            
+
             remote_session.execute(query, processed_data)
             debug_print(f"Successfully inserted {table_name}[{record_id}] into remote")
             return True
-            
+
         except Exception as e:
             error_print(f"Failed to apply INSERT for {table_name}[{record_id}]: {e}")
             return False
-    
+
     def _apply_update(self, remote_session, table_name: str, record_id: int, record_data_json: str) -> bool:
         """Apply UPDATE operation to remote database"""
         try:
             record_data = json.loads(record_data_json)
-            
+
             # Check if record exists
             existing = remote_session.execute(
                 text(f"SELECT id FROM {table_name} WHERE id = :id"),
                 {"id": record_id}
             ).fetchone()
-            
+
             if not existing:
                 debug_print(f"Record {table_name}[{record_id}] doesn't exist in remote, skipping UPDATE")
                 return True
-            
+
             # Build UPDATE query
             set_clauses = [f"{col} = :{col}" for col in record_data.keys() if col != 'id']
             query = text(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE id = :id")
-            
+
             # Add id to record_data for WHERE clause
             update_data = record_data.copy()
             update_data['id'] = record_id
-            
+
             remote_session.execute(query, update_data)
             debug_print(f"Successfully updated {table_name}[{record_id}] in remote")
             return True
-            
+
         except Exception as e:
             error_print(f"Failed to apply UPDATE for {table_name}[{record_id}]: {e}")
             return False
-    
+
     def _apply_delete(self, remote_session, table_name: str, record_id: int) -> bool:
         """Apply DELETE operation to remote database"""
         try:
@@ -257,7 +257,7 @@ class DatabaseMerger:
                 )
                 debug_print(f"Successfully deleted {table_name}[{record_id}] from remote")
                 return True
-            
+
             # For projects and task_categories, be more careful about deletes
             # Check if the record is referenced by any sprints
             if table_name in ['projects', 'task_categories']:
@@ -266,20 +266,20 @@ class DatabaseMerger:
                     text(f"SELECT COUNT(*) FROM sprints WHERE {foreign_key_col} = :id"),
                     {"id": record_id}
                 ).fetchone()[0]
-                
+
                 if references > 0:
                     debug_print(f"Skipping DELETE of {table_name}[{record_id}] - still referenced by {references} sprints")
                     return True
-                
+
                 remote_session.execute(
                     text(f"DELETE FROM {table_name} WHERE id = :id"),
                     {"id": record_id}
                 )
                 debug_print(f"Successfully deleted {table_name}[{record_id}] from remote")
                 return True
-            
+
             return True
-            
+
         except Exception as e:
             error_print(f"Failed to apply DELETE for {table_name}[{record_id}]: {e}")
             return False

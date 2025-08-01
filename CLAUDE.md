@@ -197,6 +197,8 @@ Each source file should contain only 1 logically coherent component of the syste
 
 A general coding principle to follow is to have a debug logging facility that supports multiple levels of detail.  Make sure that the key steps of your algorithms or code flow are captured in this logging, so that when bugs are found, I can send the debug output to you for easier triaging.  For hard to reproduce issues, have a mode where logging is always occuring, but output to a file in /tmp, one for each invocation of the application, (and thus not polluting the terminal from where the application is being run).  Then I can go back and find past runs of the application that had exhibited the defect.
 
+Since my editor flags trailing whitespaces (tab or space), make sure they are removed.
+
 ## Testing
 
 When Claude tries to run the app to debug itself, it should always use a local test database or create a temporary test version of the app that doesn't require credentials, so that

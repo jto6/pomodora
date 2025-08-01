@@ -14,17 +14,17 @@ class LocalSettingsManager:
         # Use platform-specific config directories
         import platform
         system = platform.system()
-        
+
         if system == 'Darwin':  # macOS
             config_dir = Path.home() / 'Library' / 'Application Support' / 'pomodora'
         elif system == 'Linux':  # Linux
             config_dir = Path.home() / '.config' / 'pomodora'
         else:  # Windows and other systems
             config_dir = Path.home() / 'AppData' / 'Local' / 'pomodora'
-        
+
         config_dir.mkdir(parents=True, exist_ok=True)
         self.config_file = config_dir / 'settings.json'
-        
+
         # Default settings
         self.defaults = {
             'theme_mode': 'light',  # light, dark, system
@@ -43,9 +43,9 @@ class LocalSettingsManager:
             'google_credentials_path': 'credentials.json',  # path to Google Drive credentials
             'google_drive_folder': 'TimeTracking',  # folder name in Google Drive
         }
-        
+
         self._settings = self._load_settings()
-    
+
     def _load_settings(self) -> Dict[str, Any]:
         """Load settings from file, creating defaults if file doesn't exist"""
         try:
@@ -61,7 +61,7 @@ class LocalSettingsManager:
         except (json.JSONDecodeError, IOError) as e:
             error_print(f"Error loading settings: {e}")
             return self.defaults.copy()
-    
+
     def _save_settings(self):
         """Save current settings to file"""
         try:
@@ -69,30 +69,30 @@ class LocalSettingsManager:
                 json.dump(self._settings, f, indent=2)
         except IOError as e:
             error_print(f"Error saving settings: {e}")
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get a setting value"""
         return self._settings.get(key, default)
-    
+
     def set(self, key: str, value: Any):
         """Set a setting value and save to file"""
         self._settings[key] = value
         self._save_settings()
-    
+
     def get_all(self) -> Dict[str, Any]:
         """Get all settings"""
         return self._settings.copy()
-    
+
     def update(self, settings: Dict[str, Any]):
         """Update multiple settings at once"""
         self._settings.update(settings)
         self._save_settings()
-    
+
     def reset_to_defaults(self):
         """Reset all settings to default values"""
         self._settings = self.defaults.copy()
         self._save_settings()
-    
+
     def get_config_path(self) -> str:
         """Get the path to the config file"""
         return str(self.config_file)

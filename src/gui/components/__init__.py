@@ -5,6 +5,6 @@ from .task_autocomplete import TaskAutocompleteManager
 
 __all__ = [
     'SystemTrayManager',
-    'ThemeManager', 
+    'ThemeManager',
     'TaskAutocompleteManager'
 ]
