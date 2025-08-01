@@ -712,8 +712,8 @@ class ModernPomodoroWindow(QMainWindow):
         thread = threading.Thread(target=play_alarm, daemon=True)
         thread.start()
 
-        # Update UI to show break state (this happens automatically in timer)
-        # The timer already transitions to BREAK state automatically
+        # Update UI to show break state - need to refresh button states
+        self.refresh_ui_state()
 
     def emit_break_complete(self):
         """Thread-safe method called from background timer thread"""
