@@ -349,6 +349,7 @@ class DatabaseManager:
                 ("Strategy", "#9b59b6"),   # Purple
                 ("Research", "#1abc9c"),   # Teal
                 ("SelfDev", "#2ecc71"),    # Green
+                ("Dev", "#f1c40f"),        # Deep yellow
             ]
 
             changes_made = False

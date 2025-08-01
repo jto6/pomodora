@@ -521,6 +521,9 @@ class ModernPomodoroWindow(QMainWindow):
             self.project_combo.clear()
             debug_print(f"Found {len(projects)} active projects")
 
+            # Sort projects alphabetically by name
+            projects = sorted(projects, key=lambda p: p['name'].lower())
+
             for project in projects:
                 # Use just the project name
                 display_name = project['name']
@@ -534,6 +537,8 @@ class ModernPomodoroWindow(QMainWindow):
                 self.db_manager.initialize_default_projects()
                 # Reload projects after initialization
                 projects = self.db_manager.get_active_projects()
+                # Sort projects alphabetically by name
+                projects = sorted(projects, key=lambda p: p['name'].lower())
                 for project in projects:
                     display_name = project['name']
                     self.project_combo.addItem(display_name, project['id'])
@@ -560,6 +565,9 @@ class ModernPomodoroWindow(QMainWindow):
             self.task_category_combo.clear()
             debug_print(f"Found {len(task_categories)} active task categories")
 
+            # Sort task categories alphabetically by name
+            task_categories = sorted(task_categories, key=lambda tc: tc['name'].lower())
+
             for task_category in task_categories:
                 display_name = task_category['name']
                 debug_print(f"Adding task category: {display_name}")
@@ -572,6 +580,8 @@ class ModernPomodoroWindow(QMainWindow):
                 self.db_manager.initialize_default_projects()  # This creates both task categories and projects
                 # Reload task categories after initialization
                 task_categories = self.db_manager.get_active_task_categories()
+                # Sort task categories alphabetically by name
+                task_categories = sorted(task_categories, key=lambda tc: tc['name'].lower())
                 for task_category in task_categories:
                     display_name = task_category['name']
                     self.task_category_combo.addItem(display_name, task_category['id'])
