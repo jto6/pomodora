@@ -1,7 +1,8 @@
 from pathlib import Path
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
-from PySide6.QtGui import QIcon, QAction
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QIcon, QAction, QPixmap, QPainter
+from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtCore import QObject, Signal, Qt
 from timer.pomodoro import TimerState
 from utils.logging import info_print, error_print, debug_print
 
@@ -51,11 +52,17 @@ class SystemTrayManager(QObject):
     def _load_tray_icon(self):
         """Load the tray icon with fallback"""
         try:
-            icon_path = Path(__file__).parent.parent.parent.parent / "assets" / "pomodora_icon.png"
+            # Try to load the main icon.png file (now based on logo.svg)
+            icon_path = Path(__file__).parent.parent.parent.parent / "icon.png"
             if icon_path.exists():
                 return QIcon(str(icon_path))
+            
+            # Fallback to assets directory
+            asset_icon_path = Path(__file__).parent.parent.parent.parent / "assets" / "pomodora_icon.png"
+            if asset_icon_path.exists():
+                return QIcon(str(asset_icon_path))
             else:
-                # Fallback to a simple built-in icon if our icon doesn't exist
+                # Final fallback to system icon
                 if self.parent_window:
                     return self.parent_window.style().standardIcon(
                         self.parent_window.style().SP_ComputerIcon

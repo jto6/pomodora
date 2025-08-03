@@ -4,7 +4,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QPushButton, QComboBox,
                                QLineEdit, QProgressBar, QFrame, QTextEdit, QMenuBar, QMenu)
 from PySide6.QtCore import QTimer, QTime, Qt, Signal
-from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction
+from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from timer.pomodoro import PomodoroTimer, TimerState
 from tracking.models import DatabaseManager, TaskCategory, Project, Sprint
 from audio.alarm import play_alarm_async
@@ -15,6 +16,7 @@ from utils.progress_wrapper import run_with_auto_progress
 from gui.components.theme_manager import ThemeManager
 from gui.components.settings_dialog import SettingsDialog
 from gui.components.activity_manager import ActivityClassificationsDialog
+from gui.components.system_tray import SystemTrayManager
 
 
 class ModernPomodoroWindow(QMainWindow):
@@ -104,6 +106,15 @@ class ModernPomodoroWindow(QMainWindow):
         # Initialize theme manager
         self.theme_manager = ThemeManager(self)
 
+        # Load and set application icon
+        self.app_icon = self.load_app_icon()
+        if self.app_icon:
+            self.setWindowIcon(self.app_icon)
+
+        # Initialize system tray
+        self.system_tray = SystemTrayManager(self)
+        self.system_tray.init_system_tray()
+
         self.init_ui()
         self.create_menu_bar()
         self.load_settings()  # Load settings before applying styling
@@ -122,6 +133,35 @@ class ModernPomodoroWindow(QMainWindow):
         debug_print("Calling update_stats() on startup")
         self.update_stats()
         debug_print(f"Stats label text after update: '{self.stats_label.text()}'")
+
+    def load_app_icon(self):
+        """Load the application icon from logo.svg"""
+        try:
+            from pathlib import Path
+            logo_path = Path(__file__).parent.parent.parent / "logo.svg"
+            
+            if logo_path.exists():
+                # Create SVG renderer and render to pixmap
+                renderer = QSvgRenderer(str(logo_path))
+                if renderer.isValid():
+                    pixmap = QPixmap(64, 64)  # 64x64 icon size
+                    pixmap.fill(Qt.transparent)  # Transparent background
+                    
+                    from PySide6.QtGui import QPainter
+                    painter = QPainter(pixmap)
+                    renderer.render(painter)
+                    painter.end()
+                    
+                    return QIcon(pixmap)
+                else:
+                    error_print("SVG renderer is not valid for logo.svg")
+            else:
+                error_print(f"Logo file not found at: {logo_path}")
+                
+        except Exception as e:
+            error_print(f"Error loading app icon: {e}")
+            
+        return None
 
     def mousePressEvent(self, event):
         """Handle mouse clicks - exit compact mode on any click"""
@@ -244,11 +284,25 @@ class ModernPomodoroWindow(QMainWindow):
         header_frame.setObjectName("headerFrame")
         header_layout = QHBoxLayout(header_frame)
 
-        title_label = QLabel("🍅 Pomodora")
+        # Create title with icon
+        title_layout = QHBoxLayout()
+        
+        # Add icon if available
+        if hasattr(self, 'app_icon') and self.app_icon:
+            icon_label = QLabel()
+            icon_pixmap = self.app_icon.pixmap(32, 32)  # 32x32 for header
+            icon_label.setPixmap(icon_pixmap)
+            title_layout.addWidget(icon_label)
+        
+        title_label = QLabel("Pomodora")
         title_label.setObjectName("titleLabel")
-        title_label.setAlignment(Qt.AlignCenter)
+        title_layout.addWidget(title_label)
+        
+        # Center the title layout
+        header_layout.addStretch()
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
 
-        header_layout.addWidget(title_label)
         layout.addWidget(header_frame)
 
     def create_timer_section(self, layout):
@@ -1156,7 +1210,15 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Modern style
 
-    # Set application properties for proper macOS menu bar display
+    # Set the process name for Linux systems (helps with taskbar/window manager display)
+    try:
+        import setproctitle
+        setproctitle.setproctitle("Pomodora")
+    except ImportError:
+        # setproctitle is optional, continue without it
+        pass
+
+    # Set application properties for proper Qt/desktop display
     app.setApplicationName("Pomodora")
     app.setApplicationDisplayName("Pomodora")
     app.setApplicationVersion("1.0")

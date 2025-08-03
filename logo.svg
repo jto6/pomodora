@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Outer ring -->
+  <circle cx="100" cy="100" r="90" fill="#e74c3c" stroke="none"/>
+  
+  <!-- Second ring -->
+  <circle cx="100" cy="100" r="70" fill="#ffffff" stroke="none"/>
+  
+  <!-- Third ring -->
+  <circle cx="100" cy="100" r="50" fill="#e74c3c" stroke="none"/>
+  
+  <!-- Fourth ring -->
+  <circle cx="100" cy="100" r="30" fill="#ffffff" stroke="none"/>
+  
+  <!-- Center bullseye -->
+  <circle cx="100" cy="100" r="15" fill="#c0392b" stroke="none"/>
+  
+  <!-- Gradients for realistic arrow -->
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.1"/>
+    </filter>
+    
+    <!-- Wood grain gradient for shaft -->
+    <linearGradient id="woodGrain" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#8B4513;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#A0522D;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#CD853F;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B4513;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Metal gradient for arrowhead -->
+    <linearGradient id="metalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8E8E8;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#C0C0C0;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#A9A9A9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#696969;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Feather gradient -->
+    <linearGradient id="featherGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#DC143C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B22222;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Apply shadow to the entire bullseye -->
+  <g filter="url(#shadow)">
+    <!-- Outer ring - Red with black border -->
+    <circle cx="100" cy="100" r="90" fill="#e74c3c" stroke="#000000" stroke-width="2"/>
+    
+    <!-- Second ring - White -->
+    <circle cx="100" cy="100" r="70" fill="#ffffff" stroke="none"/>
+    
+    <!-- Third ring - Blue -->
+    <circle cx="100" cy="100" r="50" fill="#3498db" stroke="none"/>
+    
+    <!-- Fourth ring - White -->
+    <circle cx="100" cy="100" r="30" fill="#ffffff" stroke="none"/>
+    
+    <!-- Center bullseye - Red -->
+    <circle cx="100" cy="100" r="15" fill="#c0392b" stroke="none"/>
+  </g>
+  
+  <!-- Arrow with depth perspective - angled and realistic fletching -->
+  <g transform="rotate(-20 100 100)">
+    <!-- Arrow shaft tapering toward the tip for perspective - skinnier -->
+    <path d="M96,25 L104,25 L102,95 L98,95 Z" fill="url(#woodGrain)" stroke="#654321" stroke-width="0.2"/>
+    
+    <!-- Wood grain lines following perspective -->
+    <line x1="97" y1="27" x2="98.5" y2="93" stroke="#654321" stroke-width="0.3" opacity="0.6"/>
+    <line x1="99" y1="26" x2="99.5" y2="94" stroke="#8B4513" stroke-width="0.2" opacity="0.4"/>
+    <line x1="101" y1="26" x2="100.5" y2="94" stroke="#654321" stroke-width="0.2" opacity="0.5"/>
+    <line x1="103" y1="27" x2="101.5" y2="93" stroke="#8B4513" stroke-width="0.15" opacity="0.4"/>
+    
+    <!-- Arrow nock at back (closest to viewer) - skinnier -->
+    <ellipse cx="100" cy="25" rx="4" ry="2" fill="#654321"/>
+    <rect x="99" y="24" width="2" height="2" fill="#4A4A4A" rx="1"/>
+    
+    <!-- Very small arrowhead at tip hitting the center -->
+    <polygon points="100,100 98,98 100,95 102,98" fill="url(#metalGradient)" stroke="#555555" stroke-width="0.2"/>
+    <polygon points="100,96 99,97 100,95.5 101,97" fill="#F5F5F5" opacity="0.8"/>
+    
+    <!-- Realistic natural fletching - smaller and more proportionate -->
+    <g opacity="0.95">
+      <!-- Left feather - natural curve and taper -->
+      <path d="M94,30 Q88,20 92,12 Q97,17 98,28 Q96,30 94,30 Z" fill="url(#featherGradient)" stroke="#8B0000" stroke-width="0.2"/>
+      <!-- Feather barbs/texture -->
+      <path d="M92,25 Q90,23 92,17" fill="none" stroke="#B22222" stroke-width="0.15" opacity="0.7"/>
+      <path d="M94,27 Q91,25 93,19" fill="none" stroke="#B22222" stroke-width="0.1" opacity="0.6"/>
+      <path d="M96,28 Q93,26 95,21" fill="none" stroke="#B22222" stroke-width="0.1" opacity="0.5"/>
+      
+      <!-- Right feather - natural curve and taper -->
+      <path d="M106,30 Q112,20 108,12 Q103,17 102,28 Q104,30 106,30 Z" fill="url(#featherGradient)" stroke="#8B0000" stroke-width="0.2"/>
+      <!-- Feather barbs/texture -->
+      <path d="M108,25 Q110,23 108,17" fill="none" stroke="#B22222" stroke-width="0.15" opacity="0.7"/>
+      <path d="M106,27 Q109,25 107,19" fill="none" stroke="#B22222" stroke-width="0.1" opacity="0.6"/>
+      <path d="M104,28 Q107,26 105,21" fill="none" stroke="#B22222" stroke-width="0.1" opacity="0.5"/>
+      
+      <!-- Top/center feather - white with natural shape -->
+      <path d="M100,32 Q103,22 100,10 Q97,22 100,32 Z" fill="#F8F8FF" stroke="#DCDCDC" stroke-width="0.2"/>
+      <!-- White feather barbs -->
+      <path d="M100,26 Q101,24 100,16" fill="none" stroke="#E0E0E0" stroke-width="0.15" opacity="0.8"/>
+      <path d="M99,28 Q97,26 99,18" fill="none" stroke="#E0E0E0" stroke-width="0.1" opacity="0.7"/>
+      <path d="M101,28 Q103,26 101,18" fill="none" stroke="#E0E0E0" stroke-width="0.1" opacity="0.7"/>
+    </g>
+    
+    <!-- Fletching binding - where feathers attach naturally -->
+    <ellipse cx="100" cy="28" rx="5" ry="2.5" fill="#8B4513"/>
+    <ellipse cx="100" cy="27" rx="5" ry="2.5" fill="#A0522D"/>
+    <!-- Binding wrap detail -->
+    <ellipse cx="100" cy="27.5" rx="4" ry="1.8" fill="none" stroke="#654321" stroke-width="0.3"/>
+  </g>
+</svg>

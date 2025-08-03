@@ -2,7 +2,7 @@
 Name=Pomodora
 Comment=Pomodoro Timer Activity Tracker
 Exec=/home/jon/dev/pomodora/run.sh
-Icon=/home/jon/dev/pomodora/icon.png
+Icon=/home/jon/dev/pomodora/logo.svg
 Terminal=false
 Type=Application
 Categories=Productivity;Utility;
