@@ -818,6 +818,10 @@ class ModernPomodoroWindow(QMainWindow):
         self.pomodoro_timer.stop()
         self.qt_timer.stop()
         self.reset_ui()
+        
+        # Exit compact mode when stopping timer
+        if self.compact_mode:
+            self.toggle_compact_mode()
 
     def emit_sprint_complete(self):
         """Thread-safe method called from background timer thread"""
@@ -938,6 +942,10 @@ class ModernPomodoroWindow(QMainWindow):
             self.state_label.setText("Sprint Completed! 🎉")
             self.update_stats()
             debug_print("Sprint completion finished")
+            
+            # Exit compact mode when completing sprint
+            if self.compact_mode:
+                self.toggle_compact_mode()
         except Exception as e:
             error_print(f"Error completing sprint: {e}")
             import traceback
@@ -945,6 +953,10 @@ class ModernPomodoroWindow(QMainWindow):
             self.pomodoro_timer.stop()
             self.qt_timer.stop()
             self.reset_ui()
+            
+            # Exit compact mode even when there's an error
+            if self.compact_mode:
+                self.toggle_compact_mode()
 
     def update_display(self):
         """Update the timer display"""
