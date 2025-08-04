@@ -579,36 +579,90 @@ class ModernPomodoroWindow(QMainWindow):
         self.theme_manager.apply_compact_styling()
 
     def load_projects(self):
-        """Load projects from database"""
+        """Load projects into dropdown with default projects at top, then divider, then manual projects"""
         def do_load():
             try:
+                # Get both task categories and projects  
+                task_categories = self.db_manager.get_active_task_categories()
                 projects = self.db_manager.get_active_projects()
                 self.project_combo.clear()
-                debug_print(f"Found {len(projects)} active projects")
+                debug_print(f"Found {len(task_categories)} active task categories and {len(projects)} active projects")
 
-                # Sort projects alphabetically by name
-                projects = sorted(projects, key=lambda p: p['name'].lower())
-
+                # Create set of task category names for quick lookup
+                category_names = {tc['name'] for tc in task_categories}
+                
+                # Separate default projects (those with matching category names) from manual projects
+                default_projects = []
+                manual_projects = []
+                
                 for project in projects:
-                    # Use just the project name
+                    if project['name'] in category_names:
+                        default_projects.append(project)
+                    else:
+                        manual_projects.append(project)
+
+                # Sort both groups alphabetically
+                default_projects = sorted(default_projects, key=lambda p: p['name'].lower())
+                manual_projects = sorted(manual_projects, key=lambda p: p['name'].lower())
+
+                debug_print(f"Found {len(default_projects)} default projects and {len(manual_projects)} manual projects")
+
+                # Add default projects first
+                for project in default_projects:
                     display_name = project['name']
-                    debug_print(f"Adding project: {display_name}")
+                    debug_print(f"Adding default project: {display_name}")
                     trace_print(f"Project details: ID={project['id']}, Color={project['color']}, Active={project['active']}")
                     self.project_combo.addItem(display_name, project['id'])
 
+                # Add divider if we have both default and manual projects
+                if default_projects and manual_projects:
+                    self.project_combo.insertSeparator(len(default_projects))
+                    debug_print("Added separator between default and manual projects")
+
+                # Add manual projects after the divider
+                for project in manual_projects:
+                    display_name = project['name']
+                    debug_print(f"Adding manual project: {display_name}")
+                    trace_print(f"Project details: ID={project['id']}, Color={project['color']}, Active={project['active']}")
+                    self.project_combo.addItem(display_name, project['id'])
+
+                # Handle case where no projects exist
                 if not projects:
                     debug_print("No projects found - default projects should have been created during initialization")
                     # Re-initialize defaults if somehow missing
                     self.db_manager.initialize_default_projects()
                     # Reload projects after initialization
                     projects = self.db_manager.get_active_projects()
-                    # Sort projects alphabetically by name
-                    projects = sorted(projects, key=lambda p: p['name'].lower())
+                    task_categories = self.db_manager.get_active_task_categories()
+                    category_names = {tc['name'] for tc in task_categories}
+                    
+                    # Re-separate and sort
+                    default_projects = []
+                    manual_projects = []
                     for project in projects:
+                        if project['name'] in category_names:
+                            default_projects.append(project)
+                        else:
+                            manual_projects.append(project)
+                    
+                    default_projects = sorted(default_projects, key=lambda p: p['name'].lower())
+                    manual_projects = sorted(manual_projects, key=lambda p: p['name'].lower())
+                    
+                    # Add default projects
+                    for project in default_projects:
+                        display_name = project['name']
+                        self.project_combo.addItem(display_name, project['id'])
+                    
+                    # Add divider if needed
+                    if default_projects and manual_projects:
+                        self.project_combo.insertSeparator(len(default_projects))
+                    
+                    # Add manual projects
+                    for project in manual_projects:
                         display_name = project['name']
                         self.project_combo.addItem(display_name, project['id'])
 
-                debug_print(f"Project combo has {self.project_combo.count()} items")
+                debug_print(f"Project combo has {self.project_combo.count()} items (including separator if present)")
 
                 # Set default selection to first project if available
                 if self.project_combo.count() > 0:
