@@ -2,8 +2,8 @@ import sys
 from datetime import datetime, timedelta
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QPushButton, QComboBox,
-                               QLineEdit, QProgressBar, QFrame, QTextEdit, QMenuBar, QMenu)
-from PySide6.QtCore import QTimer, QTime, Qt, Signal
+                               QLineEdit, QProgressBar, QFrame, QTextEdit, QMenuBar, QMenu, QCompleter)
+from PySide6.QtCore import QTimer, QTime, Qt, Signal, QStringListModel
 from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from timer.pomodoro import PomodoroTimer, TimerState
@@ -447,6 +447,10 @@ class ModernPomodoroWindow(QMainWindow):
         self.task_input.setObjectName("taskInput")
         self.task_input.setPlaceholderText("What are you working on?")
         self.task_input.setFixedWidth(250)  # Narrower input box
+        
+        # Set up auto-completion for task descriptions
+        self.setup_task_autocompletion()
+        
         task_layout.addWidget(task_label)
         task_layout.addWidget(self.task_input)
         task_layout.addStretch()  # Push everything to the left
@@ -498,6 +502,67 @@ class ModernPomodoroWindow(QMainWindow):
 
         status_layout.addWidget(self.stats_label)
         layout.addWidget(status_frame)
+
+    def setup_task_autocompletion(self):
+        """Set up auto-completion for task descriptions based on recent sprints"""
+        try:
+            # Get recent unique task descriptions from database
+            recent_descriptions = self.get_recent_task_descriptions()
+            
+            # Create completer with recent descriptions
+            self.task_completer = QCompleter(recent_descriptions, self)
+            self.task_completer.setCaseSensitivity(Qt.CaseInsensitive)
+            self.task_completer.setFilterMode(Qt.MatchContains)
+            self.task_completer.setMaxVisibleItems(10)
+            
+            # Set completer on task input
+            self.task_input.setCompleter(self.task_completer)
+            
+            debug_print(f"Set up auto-completion with {len(recent_descriptions)} recent task descriptions")
+        except Exception as e:
+            error_print(f"Error setting up task auto-completion: {e}")
+
+    def get_recent_task_descriptions(self, limit=50):
+        """Get recent unique task descriptions for auto-completion"""
+        try:
+            session = self.db_manager.get_session()
+            try:
+                # Get recent sprints ordered by start time, limited to prevent too many suggestions
+                recent_sprints = session.query(Sprint.task_description).filter(
+                    Sprint.task_description != None,
+                    Sprint.task_description != ""
+                ).order_by(Sprint.start_time.desc()).limit(limit * 2).all()  # Get extra to filter out duplicates
+                
+                # Extract unique descriptions, preserving order (most recent first)
+                seen = set()
+                unique_descriptions = []
+                for (description,) in recent_sprints:
+                    if description and description not in seen:
+                        seen.add(description)
+                        unique_descriptions.append(description)
+                        if len(unique_descriptions) >= limit:
+                            break
+                
+                debug_print(f"Found {len(unique_descriptions)} unique task descriptions")
+                return unique_descriptions
+            finally:
+                session.close()
+        except Exception as e:
+            error_print(f"Error getting recent task descriptions: {e}")
+            return []
+
+    def update_task_autocompletion(self):
+        """Update auto-completion list with latest task descriptions"""
+        try:
+            recent_descriptions = self.get_recent_task_descriptions()
+            
+            # Update the completer's model
+            if hasattr(self, 'task_completer') and self.task_completer:
+                model = QStringListModel(recent_descriptions)
+                self.task_completer.setModel(model)
+                debug_print(f"Updated auto-completion with {len(recent_descriptions)} descriptions")
+        except Exception as e:
+            error_print(f"Error updating task auto-completion: {e}")
 
     def create_menu_bar(self):
         """Create menu bar with all application features"""
@@ -933,6 +998,9 @@ class ModernPomodoroWindow(QMainWindow):
                 today_sprints = self.db_manager.get_sprints_by_date(date.today())
                 debug_print(f"Verification: {len(today_sprints)} sprints now in database for today")
 
+                # Update auto-completion with the new task description
+                self.update_task_autocompletion()
+
             else:
                 error_print(f"❌ Cannot save sprint - no project selected (project_id: {self.current_project_id})")
 
@@ -1000,6 +1068,9 @@ class ModernPomodoroWindow(QMainWindow):
         self.sync_compact_buttons()  # Sync compact button states
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)  # Ensure progress bar is visible
+
+        # Clear task description field
+        self.task_input.clear()
 
         # Set timer display to current sprint duration
         sprint_minutes = self.pomodoro_timer.sprint_duration // 60
