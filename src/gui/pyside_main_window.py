@@ -116,6 +116,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.system_tray.init_system_tray()
 
         self.init_ui()
+        self.setup_sprint_shortcuts()
         self.create_menu_bar()
         self.load_settings()  # Load settings before applying styling
         self.apply_modern_styling()
@@ -617,6 +618,18 @@ class ModernPomodoroWindow(QMainWindow):
 
         popup.setCurrentIndex(prev_index)
         popup.scrollTo(prev_index)
+
+    def setup_sprint_shortcuts(self):
+        """Setup keyboard shortcuts for sprint operations"""
+        # Ctrl+S to start/pause sprint
+        self.ctrl_s_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.ctrl_s_shortcut.activated.connect(self.toggle_timer)
+
+        # Ctrl+C to complete sprint
+        self.ctrl_c_shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        self.ctrl_c_shortcut.activated.connect(self.complete_sprint)
+
+        debug_print("Setup Ctrl+S/Ctrl+C shortcuts for sprint operations")
 
     def create_menu_bar(self):
         """Create menu bar with all application features"""
