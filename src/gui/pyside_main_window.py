@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QPushButton, QComboBox,
                                QLineEdit, QProgressBar, QFrame, QTextEdit, QMenuBar, QMenu, QCompleter)
 from PySide6.QtCore import QTimer, QTime, Qt, Signal, QStringListModel
-from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction, QPixmap
+from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction, QPixmap, QShortcut, QKeySequence
 from PySide6.QtSvg import QSvgRenderer
 from timer.pomodoro import PomodoroTimer, TimerState
 from tracking.models import DatabaseManager, TaskCategory, Project, Sprint
@@ -518,6 +518,9 @@ class ModernPomodoroWindow(QMainWindow):
             # Set completer on task input
             self.task_input.setCompleter(self.task_completer)
             
+            # Setup keyboard shortcuts for completion navigation
+            self.setup_completion_shortcuts()
+            
             debug_print(f"Set up auto-completion with {len(recent_descriptions)} recent task descriptions")
         except Exception as e:
             error_print(f"Error setting up task auto-completion: {e}")
@@ -563,6 +566,57 @@ class ModernPomodoroWindow(QMainWindow):
                 debug_print(f"Updated auto-completion with {len(recent_descriptions)} descriptions")
         except Exception as e:
             error_print(f"Error updating task auto-completion: {e}")
+
+    def setup_completion_shortcuts(self):
+        """Setup keyboard shortcuts for completion navigation"""
+        if not hasattr(self, 'task_completer') or not self.task_completer:
+            return
+
+        # Ctrl+N to move down in completion list (like vim/emacs)
+        self.ctrl_n_shortcut = QShortcut(QKeySequence("Ctrl+N"), self.task_input)
+        self.ctrl_n_shortcut.activated.connect(self.move_completer_down)
+
+        # Ctrl+P to move up in completion list (like vim/emacs)
+        self.ctrl_p_shortcut = QShortcut(QKeySequence("Ctrl+P"), self.task_input)
+        self.ctrl_p_shortcut.activated.connect(self.move_completer_up)
+
+        debug_print("Setup Ctrl+N/Ctrl+P shortcuts for completion navigation")
+
+    def move_completer_down(self):
+        """Move down in the completion popup (Ctrl+N)"""
+        if not hasattr(self, 'task_completer') or not self.task_completer or not self.task_completer.popup().isVisible():
+            return
+
+        popup = self.task_completer.popup()
+        current_index = popup.currentIndex()
+        model = popup.model()
+
+        # Move to next item, wrap to first if at end
+        if current_index.row() < model.rowCount() - 1:
+            next_index = model.index(current_index.row() + 1, 0)
+        else:
+            next_index = model.index(0, 0)
+
+        popup.setCurrentIndex(next_index)
+        popup.scrollTo(next_index)
+
+    def move_completer_up(self):
+        """Move up in the completion popup (Ctrl+P)"""
+        if not hasattr(self, 'task_completer') or not self.task_completer or not self.task_completer.popup().isVisible():
+            return
+
+        popup = self.task_completer.popup()
+        current_index = popup.currentIndex()
+        model = popup.model()
+
+        # Move to previous item, wrap to last if at beginning
+        if current_index.row() > 0:
+            prev_index = model.index(current_index.row() - 1, 0)
+        else:
+            prev_index = model.index(model.rowCount() - 1, 0)
+
+        popup.setCurrentIndex(prev_index)
+        popup.scrollTo(prev_index)
 
     def create_menu_bar(self):
         """Create menu bar with all application features"""
