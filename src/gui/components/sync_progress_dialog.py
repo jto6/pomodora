@@ -25,6 +25,7 @@ class SyncProgressThread(QThread):
         
     def run(self):
         """Execute the sync operation in background thread"""
+        progress_timer = None
         try:
             self.status_update.emit(f"{self.operation_name}...")
             self.progress_update.emit(10)
@@ -47,7 +48,11 @@ class SyncProgressThread(QThread):
             # Execute the actual sync operation
             result = self.sync_operation()
             
-            progress_timer.stop()
+            # Clean up timer
+            if progress_timer:
+                progress_timer.stop()
+                progress_timer.deleteLater()
+                progress_timer = None
             
             if self._cancelled:
                 self.finished.emit(False)
@@ -62,6 +67,10 @@ class SyncProgressThread(QThread):
             self.finished.emit(result)
             
         except Exception as e:
+            # Clean up timer in exception case too
+            if progress_timer:
+                progress_timer.stop()
+                progress_timer.deleteLater()
             self.status_update.emit(f"Sync error: {str(e)}")
             self.finished.emit(False)
     
@@ -127,9 +136,16 @@ class SyncProgressDialog:
         # Show dialog and wait for completion
         result = self.dialog.exec()
         
-        # Wait for thread to finish if still running
+        # Ensure thread is properly cleaned up
         if self.thread and self.thread.isRunning():
-            self.thread.wait(5000)  # Wait up to 5 seconds
+            self.thread.cancel()
+            if not self.thread.wait(3000):  # Wait up to 3 seconds for graceful shutdown
+                # Force terminate if thread won't stop
+                self.thread.terminate()
+                self.thread.wait(1000)  # Wait for termination
+                
+        # Clean up thread reference
+        self.thread = None
             
         # Return success if dialog completed normally and sync succeeded
         return hasattr(self, '_sync_result') and self._sync_result
@@ -149,7 +165,11 @@ class SyncProgressDialog:
         """Handle user cancellation"""
         if self.thread:
             self.thread.cancel()
-            self.thread.wait(2000)  # Wait up to 2 seconds for graceful shutdown
+            # First try graceful shutdown
+            if not self.thread.wait(2000):  # Wait up to 2 seconds for graceful shutdown
+                # If thread doesn't finish gracefully, force terminate
+                self.thread.terminate()
+                self.thread.wait(1000)  # Wait up to 1 second for termination
         self._sync_result = False
 
 
