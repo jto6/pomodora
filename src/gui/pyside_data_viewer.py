@@ -1,11 +1,13 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem,
                                QComboBox, QDateEdit, QTabWidget, QFrame,
-                               QHeaderView, QMessageBox, QFileDialog, QScrollArea)
+                               QHeaderView, QMessageBox, QFileDialog, QScrollArea,
+                               QDialog, QTextEdit)
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QFont
 from datetime import datetime, timedelta, date
 import calendar
+from utils.logging import debug_print
 
 class PySideDataViewerWindow(QWidget):
     """Modern PySide6 data viewer for Pomodoro sprints"""
@@ -133,6 +135,9 @@ class PySideDataViewerWindow(QWidget):
 
         self.sprint_table.setAlternatingRowColors(True)
         self.sprint_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        
+        # Connect selection change to enable/disable delete button
+        self.sprint_table.itemSelectionChanged.connect(self.on_sprint_selection_changed)
 
         sprint_layout.addWidget(self.sprint_table)
         self.tab_widget.addTab(sprint_widget, "📋 Sprint List")
@@ -178,6 +183,12 @@ class PySideDataViewerWindow(QWidget):
         export_button = QPushButton("📁 Export to Excel")
         export_button.clicked.connect(self.export_current_view)
         button_layout.addWidget(export_button)
+
+        # Delete sprint button
+        self.delete_button = QPushButton("🗑️ Delete Selected Sprint")
+        self.delete_button.clicked.connect(self.delete_selected_sprint)
+        self.delete_button.setEnabled(False)  # Initially disabled
+        button_layout.addWidget(self.delete_button)
 
         button_layout.addStretch()
 
@@ -305,6 +316,24 @@ class PySideDataViewerWindow(QWidget):
 
         QPushButton:pressed {
             background: #4c63d2;
+        }
+
+        /* Delete button specific styling */
+        QPushButton[text*="Delete"] {
+            background: #dc3545;
+        }
+
+        QPushButton[text*="Delete"]:hover {
+            background: #c82333;
+        }
+
+        QPushButton[text*="Delete"]:pressed {
+            background: #bd2130;
+        }
+
+        QPushButton:disabled {
+            background: #6c757d;
+            color: #adb5bd;
         }
 
         QComboBox, QDateEdit {
@@ -446,6 +475,24 @@ class PySideDataViewerWindow(QWidget):
 
         QPushButton:pressed {
             background: #4c63d2;
+        }
+
+        /* Delete button specific styling */
+        QPushButton[text*="Delete"] {
+            background: #dc3545;
+        }
+
+        QPushButton[text*="Delete"]:hover {
+            background: #c82333;
+        }
+
+        QPushButton[text*="Delete"]:pressed {
+            background: #bd2130;
+        }
+
+        QPushButton:disabled {
+            background: #4a5568;
+            color: #718096;
         }
 
         QComboBox, QDateEdit {
@@ -622,10 +669,15 @@ class PySideDataViewerWindow(QWidget):
     def populate_sprint_table(self, sprints):
         """Populate the sprint table with data"""
         self.sprint_table.setRowCount(len(sprints))
+        
+        # Store sprints for deletion reference
+        self.current_sprints = sprints
 
         for row, sprint in enumerate(sprints):
             # Date
             date_item = QTableWidgetItem(sprint.start_time.strftime("%Y-%m-%d"))
+            # Store sprint index in the first column for easy retrieval
+            date_item.setData(Qt.UserRole, row)
             self.sprint_table.setItem(row, 0, date_item)
 
             # Time
@@ -802,3 +854,171 @@ class PySideDataViewerWindow(QWidget):
 
         except ImportError:
             raise Exception("openpyxl library not found. Please install it with: pip install openpyxl")
+
+    def on_sprint_selection_changed(self):
+        """Handle sprint table selection changes"""
+        selected_rows = self.sprint_table.selectionModel().selectedRows()
+        self.delete_button.setEnabled(len(selected_rows) > 0)
+
+    def delete_selected_sprint(self):
+        """Delete the currently selected sprint"""
+        selected_rows = self.sprint_table.selectionModel().selectedRows()
+        
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select a sprint to delete.")
+            return
+            
+        # Get the selected sprint
+        row = selected_rows[0].row()
+        if row >= len(self.current_sprints):
+            QMessageBox.warning(self, "Error", "Invalid sprint selection.")
+            return
+            
+        sprint = self.current_sprints[row]
+        
+        # Confirm deletion with custom dialog
+        confirmation_dialog = QDialog(self)
+        confirmation_dialog.setWindowTitle("Confirm Deletion")
+        confirmation_dialog.setFixedSize(450, 250)
+        confirmation_dialog.setModal(True)
+        
+        # Apply theme-aware styling to dialog
+        is_dark_theme = self.get_current_theme() == 'dark'
+        
+        if is_dark_theme:
+            dialog_style = """
+            QDialog {
+                background: #1a202c;
+                color: #e2e8f0;
+            }
+            """
+            details_bg = "#2d3748"
+            details_color = "#e2e8f0"
+            warning_color = "#718096"
+            cancel_style = "padding: 8px 20px; font-size: 12px; background: #4a5568; color: #e2e8f0; border: none; border-radius: 4px;"
+        else:
+            dialog_style = """
+            QDialog {
+                background: #ffffff;
+                color: #000000;
+            }
+            """
+            details_bg = "#f8f9fa"
+            details_color = "#212529"
+            warning_color = "#6c757d"
+            cancel_style = "padding: 8px 20px; font-size: 12px; background: #6c757d; color: white; border: none; border-radius: 4px;"
+        
+        confirmation_dialog.setStyleSheet(dialog_style)
+        
+        layout = QVBoxLayout(confirmation_dialog)
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Warning message
+        warning_label = QLabel("⚠️ Are you sure you want to delete this sprint?")
+        warning_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #dc3545;")
+        layout.addWidget(warning_label)
+        
+        # Sprint details
+        details_text = (
+            f"Project: {sprint.project_name}\n"
+            f"Task: {sprint.task_description}\n"
+            f"Date: {sprint.start_time.strftime('%Y-%m-%d %H:%M')}"
+        )
+        details_label = QLabel(details_text)
+        details_label.setStyleSheet(f"font-size: 12px; padding: 10px; background: {details_bg}; color: {details_color}; border-radius: 5px;")
+        details_label.setWordWrap(True)
+        layout.addWidget(details_label)
+        
+        # Final warning
+        final_warning = QLabel("This action cannot be undone.")
+        final_warning.setStyleSheet(f"font-size: 12px; font-style: italic; color: {warning_color};")
+        layout.addWidget(final_warning)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setStyleSheet(cancel_style)
+        cancel_button.clicked.connect(confirmation_dialog.reject)
+        button_layout.addWidget(cancel_button)
+        
+        delete_button = QPushButton("Delete Sprint")
+        delete_button.setStyleSheet("padding: 8px 20px; font-size: 12px; background: #dc3545; color: white; border: none; border-radius: 4px;")
+        delete_button.clicked.connect(confirmation_dialog.accept)
+        button_layout.addWidget(delete_button)
+        
+        layout.addLayout(button_layout)
+        
+        reply = confirmation_dialog.exec()
+        
+        if reply == QDialog.DialogCode.Accepted:
+            try:
+                # Delete the sprint from database
+                success = self.db_manager.delete_sprint(sprint.id)
+                
+                if success:
+                    # Wait for sync to complete before showing success dialog
+                    debug_print("Waiting for sync to complete after sprint deletion...")
+                    if hasattr(self.db_manager, 'wait_for_pending_syncs'):
+                        self.db_manager.wait_for_pending_syncs(timeout=10.0)
+                    debug_print("Sync wait completed")
+                    # Create a properly sized success dialog
+                    success_dialog = QDialog(self)
+                    success_dialog.setWindowTitle("Success")
+                    success_dialog.setFixedSize(350, 150)
+                    success_dialog.setModal(True)
+                    
+                    # Apply theme-aware styling
+                    is_dark_theme = self.get_current_theme() == 'dark'
+                    
+                    if is_dark_theme:
+                        dialog_style = """
+                        QDialog {
+                            background: #1a202c;
+                            color: #e2e8f0;
+                        }
+                        """
+                        ok_button_style = "padding: 8px 20px; font-size: 12px; min-width: 60px; background: #667eea; color: white; border: none; border-radius: 4px;"
+                    else:
+                        dialog_style = """
+                        QDialog {
+                            background: #ffffff;
+                            color: #000000;
+                        }
+                        """
+                        ok_button_style = "padding: 8px 20px; font-size: 12px; min-width: 60px; background: #667eea; color: white; border: none; border-radius: 4px;"
+                    
+                    success_dialog.setStyleSheet(dialog_style)
+                    
+                    layout = QVBoxLayout(success_dialog)
+                    layout.setSpacing(15)
+                    layout.setContentsMargins(20, 20, 20, 20)
+                    
+                    # Success message
+                    success_label = QLabel("✅ Sprint deleted successfully!")
+                    success_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #28a745;")
+                    success_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    layout.addWidget(success_label)
+                    
+                    # OK button
+                    button_layout = QHBoxLayout()
+                    button_layout.addStretch()
+                    
+                    ok_button = QPushButton("OK")
+                    ok_button.setStyleSheet(ok_button_style)
+                    ok_button.clicked.connect(success_dialog.accept)
+                    button_layout.addWidget(ok_button)
+                    button_layout.addStretch()
+                    
+                    layout.addLayout(button_layout)
+                    
+                    success_dialog.exec()
+                    # Refresh the view
+                    self.load_data()
+                else:
+                    QMessageBox.warning(self, "Error", "Failed to delete sprint.")
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"An error occurred while deleting the sprint:\n{str(e)}")

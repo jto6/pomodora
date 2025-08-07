@@ -217,6 +217,8 @@ class DatabaseManager(ProgressCapableMixin):
                 self.google_drive_manager = GoogleDriveManager(self.db_path)
                 self.google_drive_manager.drive_sync.credentials_path = credentials_path
                 self.google_drive_manager.folder_name = drive_folder
+                debug_print(f"Google Drive manager initialized with folder: {drive_folder}")
+                debug_print(f"Google Drive manager enabled: {self.google_drive_manager.is_enabled()}")
 
                 if not self.google_drive_manager.initialize():
                     error_print("Warning: Google Drive initialization failed")
@@ -235,40 +237,84 @@ class DatabaseManager(ProgressCapableMixin):
 
         return self.Session()
 
+    def _run_sync_with_timeout(self, timeout_seconds=30):
+        """Run sync operation with timeout to prevent hanging"""
+        import threading
+        import queue
+        
+        # Use a queue to get the result from the sync thread
+        result_queue = queue.Queue()
+        
+        def sync_worker():
+            """Run the actual sync in a separate thread"""
+            try:
+                result = self._leader_election_sync()
+                result_queue.put(('success', result))
+            except Exception as e:
+                result_queue.put(('error', e))
+        
+        # Start the sync worker thread
+        worker_thread = threading.Thread(target=sync_worker, daemon=True, name="SyncWorker")
+        worker_thread.start()
+        
+        # Wait for result with timeout
+        try:
+            result_type, result_value = result_queue.get(timeout=timeout_seconds)
+            if result_type == 'success':
+                return result_value
+            else:
+                error_print(f"Sync failed with exception: {result_value}")
+                return False
+        except queue.Empty:
+            error_print(f"Sync operation timed out after {timeout_seconds} seconds")
+            return False
+
     def _sync_after_commit(self):
         """Trigger non-blocking sync to Google Drive after database commits"""
-        if self.google_drive_manager and self.google_drive_manager.is_enabled():
-            # Clean up finished threads first
-            self._cleanup_finished_sync_threads()
+        debug_print("_sync_after_commit called")
+        
+        if not self.google_drive_manager:
+            debug_print("No google_drive_manager available - skipping sync")
+            return
+            
+        if not self.google_drive_manager.is_enabled():
+            debug_print("Google Drive sync is disabled - skipping sync")
+            return
+            
+        debug_print("Google Drive manager is enabled - starting background sync")
+        
+        # Clean up finished threads first
+        self._cleanup_finished_sync_threads()
 
-            # Start background sync to avoid blocking UI
-            import threading
-            import time
+        # Start background sync to avoid blocking UI
+        import threading
+        import time
 
-            def background_sync():
+        def background_sync():
+            try:
+                debug_print("Starting background sync to Google Drive...")
+                start_time = time.time()
+
+                # Run sync with timeout to prevent hanging
+                success = self._run_sync_with_timeout(timeout_seconds=30)
+
+                elapsed = time.time() - start_time
+                if success:
+                    info_print(f"Database changes synced to Google Drive ({elapsed:.1f}s)")
+                else:
+                    error_print(f"Failed to sync database changes to Google Drive ({elapsed:.1f}s)")
+
+            except Exception as e:
+                elapsed = time.time() - start_time if 'start_time' in locals() else 0
+                error_print(f"Error syncing to Google Drive ({elapsed:.1f}s): {e}")
+            finally:
+                # Remove this thread from tracking list
                 try:
-                    debug_print("Starting background sync to Google Drive...")
-                    start_time = time.time()
+                    self._background_sync_threads.remove(threading.current_thread())
+                except ValueError:
+                    pass  # Thread might have been cleaned up already
 
-                    success = self._leader_election_sync()
-
-                    elapsed = time.time() - start_time
-                    if success:
-                        info_print(f"Database changes synced to Google Drive ({elapsed:.1f}s)")
-                    else:
-                        error_print(f"Failed to sync database changes to Google Drive ({elapsed:.1f}s)")
-
-                except Exception as e:
-                    elapsed = time.time() - start_time if 'start_time' in locals() else 0
-                    error_print(f"Error syncing to Google Drive ({elapsed:.1f}s): {e}")
-                finally:
-                    # Remove this thread from tracking list
-                    try:
-                        self._background_sync_threads.remove(threading.current_thread())
-                    except ValueError:
-                        pass  # Thread might have been cleaned up already
-
-            # Run sync in background thread (non-daemon so it can complete on app exit)
+            # Run sync in background thread (non-daemon but with timeouts to prevent hanging)
             sync_thread = threading.Thread(target=background_sync, daemon=False, name="GoogleDriveSync")
             self._background_sync_threads.append(sync_thread)
             sync_thread.start()
@@ -890,6 +936,61 @@ class DatabaseManager(ProgressCapableMixin):
 
         # Create backup after adding sprint
         self._perform_backup_if_needed()
+
+    def delete_sprint(self, sprint_id):
+        """Delete a sprint from the database"""
+        debug_print(f"delete_sprint called with sprint_id: {sprint_id}")
+        
+        session = self.Session()
+        try:
+            # Find the sprint to delete
+            sprint = session.query(Sprint).filter(Sprint.id == sprint_id).first()
+            if not sprint:
+                debug_print(f"Sprint with ID {sprint_id} not found")
+                return False
+            
+            # Store sprint data for operation tracking before deletion
+            sprint_data = {
+                'id': sprint.id,
+                'project_id': sprint.project_id,
+                'task_category_id': sprint.task_category_id,
+                'task_description': sprint.task_description,
+                'start_time': sprint.start_time.isoformat() if sprint.start_time else None,
+                'end_time': sprint.end_time.isoformat() if sprint.end_time else None,
+                'duration_minutes': sprint.duration_minutes,
+                'planned_duration': sprint.planned_duration,
+                'completed': sprint.completed,
+                'interrupted': sprint.interrupted
+            }
+            
+            debug_print(f"Deleting sprint: {sprint.task_description} from {sprint.start_time}")
+            
+            # Log the delete operation for sync tracking
+            if hasattr(self, 'operation_tracker'):
+                self.operation_tracker.log_delete('sprints', sprint_id, sprint_data)
+            
+            # Delete the sprint
+            session.delete(sprint)
+            session.commit()
+            
+            debug_print(f"✓ Sprint deleted successfully: ID {sprint_id}")
+            
+            # AFTER deleting locally, sync to Google Drive
+            debug_print("About to call _sync_after_commit for sprint deletion")
+            self._sync_after_commit()
+            debug_print("Completed _sync_after_commit call")
+            
+            # Create backup after deleting sprint
+            self._perform_backup_if_needed()
+            
+            return True
+            
+        except Exception as e:
+            error_print(f"❌ ERROR deleting sprint: {e}")
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def _leader_election_sync(self) -> bool:
         """Sync database using leader election and proper merge operations"""
