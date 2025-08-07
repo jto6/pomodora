@@ -87,6 +87,12 @@ class ModernPomodoroWindow(QMainWindow):
         self.qt_timer = QTimer()
         self.qt_timer.timeout.connect(self.update_display)
 
+        # Date checking timer to refresh stats at midnight
+        self.date_timer = QTimer()
+        self.date_timer.timeout.connect(self.check_date_change)
+        self.date_timer.start(3600000)  # Check every hour
+        self.current_date = None  # Track current date for comparison
+
         # Sprint tracking
         self.current_project_id = None
         self.current_task_category_id = None
@@ -179,6 +185,11 @@ class ModernPomodoroWindow(QMainWindow):
             if hasattr(self, 'qt_timer') and self.qt_timer:
                 self.qt_timer.stop()
                 info_print("Qt timer stopped")
+
+            # Stop date checking timer
+            if hasattr(self, 'date_timer') and self.date_timer:
+                self.date_timer.stop()
+                info_print("Date timer stopped")
 
             # Stop pomodoro timer
             if hasattr(self, 'pomodoro_timer') and self.pomodoro_timer:
@@ -381,12 +392,20 @@ class ModernPomodoroWindow(QMainWindow):
         """Synchronize compact button states with main control buttons"""
         # In compact mode, only show controls for active sprints
         main_text = self.start_button.text()
+        timer_state = self.pomodoro_timer.get_state()
 
-        if "Start" in main_text:
+        if "Start" in main_text and timer_state == TimerState.STOPPED:
             # Hide start button in compact mode - user needs to use main interface to start new sprints
             self.compact_start_button.hide()
             self.compact_stop_button.setEnabled(False)
             self.compact_complete_button.setEnabled(False)
+        elif "Start" in main_text and timer_state == TimerState.BREAK:
+            # During break - show all buttons, enable start and complete, disable stop
+            self.compact_start_button.show()
+            self.compact_start_button.setText("Start")
+            self.compact_start_button.setEnabled(True)
+            self.compact_stop_button.setEnabled(False)  # No need to stop during break
+            self.compact_complete_button.setEnabled(True)
         elif "Pause" in main_text:
             self.compact_start_button.show()
             self.compact_start_button.setText("Pause")
@@ -922,17 +941,23 @@ class ModernPomodoroWindow(QMainWindow):
                 self.toggle_compact_mode()
 
         elif self.pomodoro_timer.state == TimerState.BREAK:
-            # During break - end break and start new sprint
-            debug_print("Ending break early and starting new sprint")
-            self.pomodoro_timer.stop()  # Stop the break
-            self.qt_timer.stop()
+            # During break - complete current sprint first, then start new sprint
+            debug_print("Ending break early - completing current sprint and starting new one")
+            
+            # Save the previous sprint parameters before completing
+            prev_project_id = self.current_project_id
+            prev_task_category_id = self.current_task_category_id
+            prev_task_description = self.current_task_description
+            
+            # Complete the current sprint first (uses the original sprint parameters)
+            self.complete_sprint()
+            
+            # Now start new sprint with the SAME parameters as the just-completed sprint
+            self.current_project_id = prev_project_id
+            self.current_task_category_id = prev_task_category_id
+            self.current_task_description = prev_task_description
 
-            # Start new sprint
-            self.current_project_id = self.project_combo.currentData()
-            self.current_task_category_id = self.task_category_combo.currentData()
-            self.current_task_description = self.task_input.text().strip() or None
-
-            debug_print(f"New sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
+            debug_print(f"New sprint started with same parameters - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
             self.qt_timer.start(1000)
             self.start_button.setText("Pause")
@@ -947,6 +972,11 @@ class ModernPomodoroWindow(QMainWindow):
 
     def stop_timer(self):
         """Stop the current timer"""
+        # If stopping during break, complete the sprint first
+        if self.pomodoro_timer.get_state() == TimerState.BREAK:
+            debug_print("Stopping during break - completing sprint first")
+            self.complete_sprint()
+        
         self.pomodoro_timer.stop()
         self.qt_timer.stop()
         self.reset_ui()
@@ -985,6 +1015,7 @@ class ModernPomodoroWindow(QMainWindow):
 
         # Update UI to show break state - need to refresh button states
         self.refresh_ui_state()
+        self.sync_compact_buttons()  # Ensure compact buttons match main window state
 
     def emit_break_complete(self):
         """Thread-safe method called from background timer thread"""
@@ -1042,6 +1073,7 @@ class ModernPomodoroWindow(QMainWindow):
 
                 # Ensure task description is not None
                 task_desc = self.current_task_description or "Pomodoro Sprint"
+                debug_print(f"Task description for sprint save: original='{self.current_task_description}', final='{task_desc}'")
 
                 sprint = Sprint(
                     project_id=self.current_project_id,
@@ -1126,6 +1158,22 @@ class ModernPomodoroWindow(QMainWindow):
         if state == TimerState.STOPPED and remaining <= 0:
             self.qt_timer.stop()
 
+    def check_date_change(self):
+        """Check if date has changed and refresh stats if needed"""
+        from datetime import date
+        today = date.today()
+        
+        if self.current_date is None:
+            # First time running - just set the current date
+            self.current_date = today
+            debug_print(f"Date tracker initialized: {today}")
+        elif self.current_date != today:
+            # Date has changed - refresh stats
+            debug_print(f"Date changed from {self.current_date} to {today} - refreshing stats")
+            self.current_date = today
+            self.update_stats()
+            info_print(f"Stats refreshed for new day: {today}")
+
     def reset_ui(self):
         """Reset UI to initial state"""
         self.start_button.setText("Start Sprint")
@@ -1160,6 +1208,9 @@ class ModernPomodoroWindow(QMainWindow):
             debug_print(f"Setting stats label to: '{stats_text}'")  # Debug
             self.stats_label.setText(stats_text)
             debug_print(f"Stats label text is now: '{self.stats_label.text()}'")  # Debug
+            
+            # Update current date tracker when stats are updated
+            self.current_date = today
         except Exception as e:
             error_print(f"Error updating stats: {e}")
             import traceback
@@ -1364,8 +1415,8 @@ class ModernPomodoroWindow(QMainWindow):
             self.state_label.setText("Paused ⏸️")
         elif timer_state == TimerState.BREAK:
             self.start_button.setText("Start")
-            self.stop_button.setEnabled(False)
-            self.complete_button.setEnabled(False)
+            self.stop_button.setEnabled(False)  # No need to stop during break
+            self.complete_button.setEnabled(True)  # Allow completing sprint during break
             self.state_label.setText("Break Time! ☕")
 
     def on_project_changed(self, project_text):
