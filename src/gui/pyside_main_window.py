@@ -220,58 +220,40 @@ class ModernPomodoroWindow(QMainWindow):
 
             # Close database connections properly
             if hasattr(self, 'db_manager') and self.db_manager:
-                # Check if there are pending syncs
-                if hasattr(self.db_manager, '_background_sync_threads') and self.db_manager._background_sync_threads:
-                    sync_count = len(self.db_manager._background_sync_threads)
-                    info_print(f"Waiting for {sync_count} pending database sync(s) to complete...")
-
-                    # Show progress to user if there are active syncs
-                    from PySide6.QtWidgets import QProgressDialog
-                    from PySide6.QtCore import Qt, QTimer
-
-                    progress = QProgressDialog("Syncing database changes...", "Force Quit", 0, 100, self)
-                    progress.setWindowTitle("Saving Data")
-                    progress.setWindowModality(Qt.WindowModal)
-                    progress.setMinimumDuration(500)  # Show after 500ms
-
-                    # Create timer to update progress
-                    timer = QTimer()
-                    start_time = __import__('time').time()
-                    timeout = 15.0  # Extended timeout for user-initiated shutdown
-
-                    def update_progress():
-                        elapsed = __import__('time').time() - start_time
-                        progress_value = min(int((elapsed / timeout) * 100), 99)
-                        progress.setValue(progress_value)
-
-                        # Check if syncs are complete
-                        if hasattr(self.db_manager, '_background_sync_threads'):
-                            remaining = len([t for t in self.db_manager._background_sync_threads if t.is_alive()])
-                            if remaining == 0:
-                                progress.setValue(100)
-                                timer.stop()
-                                progress.close()
-                                info_print("All database syncs completed")
-                                return
-
-                        # Check for timeout or user cancellation
-                        if elapsed >= timeout or progress.wasCanceled():
-                            timer.stop()
+                # Check for pending changes and sync before exit
+                if hasattr(self.db_manager, 'has_pending_changes') and hasattr(self.db_manager, 'sync_if_changes_pending'):
+                    if self.db_manager.has_pending_changes():
+                        info_print("Syncing pending changes before exit...")
+                        try:
+                            # Show brief progress dialog for exit sync
+                            from PySide6.QtWidgets import QProgressDialog
+                            from PySide6.QtCore import Qt
+                            
+                            progress = QProgressDialog("Syncing database changes...", None, 0, 0, self)
+                            progress.setWindowTitle("Saving Data")
+                            progress.setWindowModality(Qt.WindowModal)
+                            progress.setMinimumDuration(100)  # Show immediately for exit
+                            progress.setCancelButton(None)  # No cancel for exit sync
+                            progress.show()
+                            
+                            # Process events to show the dialog
+                            from PySide6.QtWidgets import QApplication
+                            QApplication.processEvents()
+                            
+                            # Perform the sync
+                            success = self.db_manager.sync_if_changes_pending()
+                            
                             progress.close()
-                            if progress.wasCanceled():
-                                info_print("Database sync cancelled by user")
+                            
+                            if success:
+                                info_print("Exit sync completed successfully")
                             else:
-                                error_print(f"Database sync timeout after {timeout}s")
-
-                    timer.timeout.connect(update_progress)
-                    timer.start(100)  # Update every 100ms
-
-                    # Perform final sync of any pending changes before exit
-                    if hasattr(self.db_manager, 'sync_if_changes_pending'):
-                        self.db_manager.sync_if_changes_pending()
-
-                    timer.stop()
-                    progress.close()
+                                error_print("Exit sync failed - some changes may not be saved")
+                                
+                        except Exception as e:
+                            error_print(f"Error during exit sync: {e}")
+                    else:
+                        debug_print("No pending changes to sync on exit")
 
                 info_print("Database cleanup completed")
 

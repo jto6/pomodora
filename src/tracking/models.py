@@ -84,9 +84,6 @@ class DatabaseManager(ProgressCapableMixin):
         self.Session = sessionmaker(bind=self.engine)
         self.session = None  # Reusable session property
 
-        # Background sync tracking
-        self._background_sync_threads = []
-
         # Database backup manager - use actual storage location, not cache
         backup_db_path, backup_base_dir = self._get_backup_storage_location()
         self.backup_manager = DatabaseBackupManager(backup_db_path, backup_base_dir)
@@ -290,9 +287,6 @@ class DatabaseManager(ProgressCapableMixin):
         debug_print("Pending changes found - starting idle sync...")
         return self._run_sync_with_timeout(timeout_seconds=30)
 
-    def _cleanup_finished_sync_threads(self):
-        """Remove finished sync threads from tracking list"""
-        self._background_sync_threads = [t for t in self._background_sync_threads if t.is_alive()]
 
     def sync_with_progress(self, parent_widget=None) -> bool:
         """
@@ -313,12 +307,11 @@ class DatabaseManager(ProgressCapableMixin):
         try:
             from gui.components.sync_progress_dialog import show_sync_progress
         except ImportError:
-            # Fallback to background sync if GUI components not available
-            self._sync_to_google_drive()  # Use existing background sync method
-            return True
+            # Fallback to direct sync if GUI components not available
+            return self._leader_election_sync()
         
         def sync_operation():
-            """The actual sync operation to run in background"""
+            """The actual sync operation to run"""
             return self._leader_election_sync()
         
         # Show progress dialog and perform sync
@@ -329,30 +322,6 @@ class DatabaseManager(ProgressCapableMixin):
             "Database Sync"
         )
 
-    def wait_for_pending_syncs(self, timeout=10.0):
-        """Wait for pending background syncs to complete (with timeout)"""
-        if not self._background_sync_threads:
-            return True
-
-        info_print(f"Waiting for {len(self._background_sync_threads)} background sync(s) to complete...")
-
-        import time
-        start_time = time.time()
-
-        while self._background_sync_threads and (time.time() - start_time) < timeout:
-            # Clean up finished threads
-            self._cleanup_finished_sync_threads()
-
-            if self._background_sync_threads:
-                time.sleep(0.1)  # Small delay before checking again
-
-        remaining = len(self._background_sync_threads)
-        if remaining == 0:
-            info_print("All background syncs completed")
-            return True
-        else:
-            error_print(f"Timeout: {remaining} background sync(s) still running after {timeout}s")
-            return False
 
     def sync_to_cloud(self) -> bool:
         """Manually trigger cloud sync"""
