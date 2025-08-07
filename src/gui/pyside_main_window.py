@@ -1416,26 +1416,113 @@ class ModernPomodoroWindow(QMainWindow):
         try:
             success = self.db_manager.sync_with_progress(self)
             
-            from PySide6.QtWidgets import QMessageBox
             if success:
-                QMessageBox.information(
-                    self, 
+                self.show_sync_dialog(
                     "Sync Complete", 
-                    "Database successfully synced with Google Drive."
+                    "Database successfully synced with Google Drive.",
+                    "information"
                 )
             else:
-                QMessageBox.warning(
-                    self, 
+                self.show_sync_dialog(
                     "Sync Failed", 
-                    "Failed to sync database with Google Drive.\nCheck the logs for more details."
+                    "Failed to sync database with Google Drive.\nCheck the logs for more details.",
+                    "warning"
                 )
         except Exception as e:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(
-                self, 
+            self.show_sync_dialog(
                 "Sync Error", 
-                f"An error occurred during sync:\n{str(e)}"
+                f"An error occurred during sync:\n{str(e)}",
+                "critical"
             )
+
+    def show_sync_dialog(self, title: str, message: str, dialog_type: str = "information"):
+        """Show a properly sized sync status dialog with theme support"""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QFrame
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QIcon, QPixmap
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setModal(True)
+        dialog.setFixedSize(400, 160)
+        
+        # Apply theme-aware styling
+        if hasattr(self, 'current_theme') and self.current_theme == 'dark':
+            dialog.setStyleSheet("""
+                QDialog {
+                    background-color: #2b2b2b;
+                    color: white;
+                }
+                QLabel {
+                    color: white;
+                    background-color: transparent;
+                }
+                QPushButton {
+                    background-color: #404040;
+                    border: 1px solid #555555;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #505050;
+                    border-color: #666666;
+                }
+                QPushButton:pressed {
+                    background-color: #353535;
+                }
+            """)
+        else:
+            dialog.setStyleSheet("""
+                QDialog {
+                    background-color: white;
+                    color: black;
+                }
+                QLabel {
+                    color: black;
+                    background-color: transparent;
+                }
+                QPushButton {
+                    background-color: #f0f0f0;
+                    border: 1px solid #cccccc;
+                    color: black;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #e0e0e0;
+                    border-color: #aaaaaa;
+                }
+                QPushButton:pressed {
+                    background-color: #d0d0d0;
+                }
+            """)
+
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Message label with word wrap and proper sizing
+        label = QLabel(message)
+        label.setWordWrap(True)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setMinimumHeight(50)
+        layout.addWidget(label)
+
+        # OK button
+        ok_button = QPushButton("OK")
+        ok_button.setFixedSize(80, 32)
+        ok_button.clicked.connect(dialog.accept)
+        
+        # Center the button
+        button_layout = QVBoxLayout()
+        button_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        button_layout.addWidget(ok_button)
+        layout.addLayout(button_layout)
+
+        dialog.exec()
 
     def refresh_ui_state(self):
         """Refresh UI elements to match current timer state"""
