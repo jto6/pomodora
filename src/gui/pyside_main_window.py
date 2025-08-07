@@ -921,8 +921,8 @@ class ModernPomodoroWindow(QMainWindow):
             self.current_task_category_id = self.task_category_combo.currentData()
             self.current_task_description = self.task_input.text().strip() or None
 
-            debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
+            debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}', Start time: {self.pomodoro_timer.start_time}")
             self.qt_timer.start(1000)  # Update every second
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)
@@ -1089,9 +1089,11 @@ class ModernPomodoroWindow(QMainWindow):
                 project_name = project.name if project else "Unknown"
                 debug_print(f"Project name resolved: {project_name}")
 
-                # Calculate actual start time based on timer duration
-                actual_duration = self.pomodoro_timer.sprint_duration - self.pomodoro_timer.get_time_remaining()
-                start_time = datetime.now() - timedelta(seconds=actual_duration)
+                # Use the timer's actual start time and calculate duration
+                start_time = self.pomodoro_timer.start_time
+                end_time = datetime.now()
+                actual_duration = (end_time - start_time).total_seconds()
+                debug_print(f"Using timer's actual start time: {start_time}")
                 debug_print(f"Calculated duration: {actual_duration}s, start_time: {start_time}")
 
                 # Ensure task description is not None
@@ -1103,7 +1105,7 @@ class ModernPomodoroWindow(QMainWindow):
                     task_category_id=self.current_task_category_id,
                     task_description=task_desc,
                     start_time=start_time,
-                    end_time=datetime.now(),
+                    end_time=end_time,
                     completed=True,
                     duration_minutes=int(actual_duration / 60),
                     planned_duration=int(self.pomodoro_timer.sprint_duration / 60)
