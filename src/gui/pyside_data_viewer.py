@@ -7,7 +7,6 @@ from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QFont
 from datetime import datetime, timedelta, date
 import calendar
-from utils.logging import debug_print
 
 class PySideDataViewerWindow(QWidget):
     """Modern PySide6 data viewer for Pomodoro sprints"""
@@ -119,9 +118,9 @@ class PySideDataViewerWindow(QWidget):
 
         # Sprint table
         self.sprint_table = QTableWidget()
-        self.sprint_table.setColumnCount(6)
+        self.sprint_table.setColumnCount(7)
         self.sprint_table.setHorizontalHeaderLabels([
-            "Date", "Time", "Project", "Task", "Duration", "Status"
+            "Date", "Time", "Project", "Category", "Task", "Duration", "Status"
         ])
 
         # Configure table
@@ -129,9 +128,10 @@ class PySideDataViewerWindow(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # Date
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)  # Time
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Project
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)           # Task
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)  # Duration
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)  # Status
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Category
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)           # Task
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)  # Duration
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)  # Status
 
         self.sprint_table.setAlternatingRowColors(True)
         self.sprint_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -688,9 +688,13 @@ class PySideDataViewerWindow(QWidget):
             project_item = QTableWidgetItem(sprint.project_name)
             self.sprint_table.setItem(row, 2, project_item)
 
+            # Category
+            category_item = QTableWidgetItem(sprint.task_category_name)
+            self.sprint_table.setItem(row, 3, category_item)
+
             # Task
             task_item = QTableWidgetItem(sprint.task_description)
-            self.sprint_table.setItem(row, 3, task_item)
+            self.sprint_table.setItem(row, 4, task_item)
 
             # Duration
             if sprint.end_time and sprint.start_time:
@@ -699,12 +703,12 @@ class PySideDataViewerWindow(QWidget):
                 duration_item = QTableWidgetItem(f"{duration_mins} min")
             else:
                 duration_item = QTableWidgetItem("N/A")
-            self.sprint_table.setItem(row, 4, duration_item)
+            self.sprint_table.setItem(row, 5, duration_item)
 
             # Status
             status = "✅ Completed" if sprint.completed else ("❌ Interrupted" if sprint.interrupted else "⏸️ Incomplete")
             status_item = QTableWidgetItem(status)
-            self.sprint_table.setItem(row, 5, status_item)
+            self.sprint_table.setItem(row, 6, status_item)
 
     def update_summary(self, sprints):
         """Update the summary tab"""
@@ -814,7 +818,7 @@ class PySideDataViewerWindow(QWidget):
             ws.title = f"Sprints_{self.current_filter.title()}"
 
             # Headers
-            headers = ["Date", "Time", "Project", "Task", "Duration (min)", "Status"]
+            headers = ["Date", "Time", "Project", "Category", "Task", "Duration (min)", "Status"]
             for col, header in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=col, value=header)
                 cell.font = Font(bold=True)
@@ -826,16 +830,17 @@ class PySideDataViewerWindow(QWidget):
                 ws.cell(row=row, column=1, value=sprint.start_time.strftime("%Y-%m-%d"))
                 ws.cell(row=row, column=2, value=sprint.start_time.strftime("%H:%M"))
                 ws.cell(row=row, column=3, value=sprint.project_name)
-                ws.cell(row=row, column=4, value=sprint.task_description)
+                ws.cell(row=row, column=4, value=sprint.task_category_name)
+                ws.cell(row=row, column=5, value=sprint.task_description)
 
                 if sprint.end_time and sprint.start_time:
                     duration = (sprint.end_time - sprint.start_time).total_seconds() / 60
-                    ws.cell(row=row, column=5, value=f"{int(duration)}")
+                    ws.cell(row=row, column=6, value=f"{int(duration)}")
                 else:
-                    ws.cell(row=row, column=5, value="N/A")
+                    ws.cell(row=row, column=6, value="N/A")
 
                 status = "Completed" if sprint.completed else ("Interrupted" if sprint.interrupted else "Incomplete")
-                ws.cell(row=row, column=6, value=status)
+                ws.cell(row=row, column=7, value=status)
 
             # Auto-adjust column widths
             for column in ws.columns:
@@ -959,11 +964,6 @@ class PySideDataViewerWindow(QWidget):
                 success = self.db_manager.delete_sprint(sprint.id)
                 
                 if success:
-                    # Wait for sync to complete before showing success dialog
-                    debug_print("Waiting for sync to complete after sprint deletion...")
-                    if hasattr(self.db_manager, 'wait_for_pending_syncs'):
-                        self.db_manager.wait_for_pending_syncs(timeout=10.0)
-                    debug_print("Sync wait completed")
                     # Create a properly sized success dialog
                     success_dialog = QDialog(self)
                     success_dialog.setWindowTitle("Success")
