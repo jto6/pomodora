@@ -18,6 +18,7 @@ class PomodoroTimer:
         self.state = TimerState.STOPPED
         self.current_time = 0
         self.start_time = None
+        self.break_start_time = None
         self.pause_time = 0
 
         # Callbacks
@@ -100,6 +101,7 @@ class PomodoroTimer:
             self.state = TimerState.STOPPED
             self.current_time = 0
             self.start_time = None
+            self.break_start_time = None
             self.pause_time = 0
             self._stop_event.set()
 
@@ -129,7 +131,7 @@ class PomodoroTimer:
                             # Sprint completed
                             self.state = TimerState.BREAK
                             self.current_time = self.break_duration
-                            self.start_time = datetime.now()
+                            self.break_start_time = datetime.now()  # Preserve original start_time for sprint duration
 
                             if self.on_sprint_complete:
                                 threading.Thread(target=self.on_sprint_complete, daemon=True).start()
@@ -137,13 +139,16 @@ class PomodoroTimer:
                                 threading.Thread(target=lambda: self.on_state_change(self.state), daemon=True).start()
 
                     elif self.state == TimerState.BREAK:
-                        self.current_time = max(0, self.break_duration - elapsed)
+                        # Use break_start_time for break duration calculation
+                        break_elapsed = (datetime.now() - self.break_start_time).total_seconds() if self.break_start_time else 0
+                        self.current_time = max(0, self.break_duration - break_elapsed)
 
                         if self.current_time <= 0:
                             # Break completed
                             self.state = TimerState.STOPPED
                             self.current_time = 0
                             self.start_time = None
+                            self.break_start_time = None
 
                             if self.on_break_complete:
                                 threading.Thread(target=self.on_break_complete, daemon=True).start()
