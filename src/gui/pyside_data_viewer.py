@@ -136,6 +136,9 @@ class PySideDataViewerWindow(QWidget):
         self.sprint_table.setAlternatingRowColors(True)
         self.sprint_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         
+        # Enable sorting but ensure default chronological order (oldest to newest)
+        self.sprint_table.setSortingEnabled(True)
+        
         # Connect selection change to enable/disable delete button
         self.sprint_table.itemSelectionChanged.connect(self.on_sprint_selection_changed)
 
@@ -668,6 +671,9 @@ class PySideDataViewerWindow(QWidget):
 
     def populate_sprint_table(self, sprints):
         """Populate the sprint table with data"""
+        # Temporarily disable sorting during population to avoid performance issues
+        self.sprint_table.setSortingEnabled(False)
+        
         self.sprint_table.setRowCount(len(sprints))
         
         # Store sprints for deletion reference
@@ -678,10 +684,14 @@ class PySideDataViewerWindow(QWidget):
             date_item = QTableWidgetItem(sprint.start_time.strftime("%Y-%m-%d"))
             # Store sprint index in the first column for easy retrieval
             date_item.setData(Qt.UserRole, row)
+            # Store full timestamp for proper sorting
+            date_item.setData(Qt.UserRole + 1, sprint.start_time.timestamp())
             self.sprint_table.setItem(row, 0, date_item)
 
             # Time
             time_item = QTableWidgetItem(sprint.start_time.strftime("%H:%M"))
+            # Store full timestamp for proper sorting
+            time_item.setData(Qt.UserRole, sprint.start_time.timestamp())
             self.sprint_table.setItem(row, 1, time_item)
 
             # Project
@@ -709,6 +719,12 @@ class PySideDataViewerWindow(QWidget):
             status = "✅ Completed" if sprint.completed else ("❌ Interrupted" if sprint.interrupted else "⏸️ Incomplete")
             status_item = QTableWidgetItem(status)
             self.sprint_table.setItem(row, 6, status_item)
+        
+        # Re-enable sorting and set default chronological order (oldest to newest)
+        self.sprint_table.setSortingEnabled(True)
+        # Sort by Time column (1) in ascending order for precise chronological order
+        # This works because we store timestamp data for proper sorting
+        self.sprint_table.sortItems(1, Qt.SortOrder.AscendingOrder)
 
     def update_summary(self, sprints):
         """Update the summary tab"""
