@@ -93,6 +93,12 @@ class ModernPomodoroWindow(QMainWindow):
         self.date_timer.start(3600000)  # Check every hour
         self.current_date = None  # Track current date for comparison
 
+        # Idle sync timer - sync pending changes after 10 minutes of inactivity
+        self.idle_sync_timer = QTimer()
+        self.idle_sync_timer.setSingleShot(True)  # Only trigger once per idle period
+        self.idle_sync_timer.timeout.connect(self.perform_idle_sync)
+        self.idle_sync_timeout = 10 * 60 * 1000  # 10 minutes in milliseconds
+
         # Sprint tracking
         self.current_project_id = None
         self.current_task_category_id = None
@@ -141,6 +147,9 @@ class ModernPomodoroWindow(QMainWindow):
         self.update_stats()
         debug_print(f"Stats label text after update: '{self.stats_label.text()}'")
 
+        # Start idle sync timer
+        self.reset_idle_sync_timer()
+
     def load_app_icon(self):
         """Load the application icon from logo.svg"""
         try:
@@ -174,7 +183,15 @@ class ModernPomodoroWindow(QMainWindow):
         """Handle mouse clicks - exit compact mode on any click"""
         if self.compact_mode:
             self.toggle_compact_mode()
+        
+        # Reset idle sync timer on user activity
+        self.reset_idle_sync_timer()
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        """Handle key presses - reset idle timer on any key activity"""
+        self.reset_idle_sync_timer()
+        super().keyPressEvent(event)
 
     def closeEvent(self, event):
         """Handle application close event to prevent segfault"""
@@ -190,6 +207,11 @@ class ModernPomodoroWindow(QMainWindow):
             if hasattr(self, 'date_timer') and self.date_timer:
                 self.date_timer.stop()
                 info_print("Date timer stopped")
+
+            # Stop idle sync timer
+            if hasattr(self, 'idle_sync_timer') and self.idle_sync_timer:
+                self.idle_sync_timer.stop()
+                info_print("Idle sync timer stopped")
 
             # Stop pomodoro timer
             if hasattr(self, 'pomodoro_timer') and self.pomodoro_timer:
@@ -244,8 +266,9 @@ class ModernPomodoroWindow(QMainWindow):
                     timer.timeout.connect(update_progress)
                     timer.start(100)  # Update every 100ms
 
-                    # Wait for syncs to complete or timeout
-                    self.db_manager.wait_for_pending_syncs(timeout=timeout)
+                    # Perform final sync of any pending changes before exit
+                    if hasattr(self.db_manager, 'sync_if_changes_pending'):
+                        self.db_manager.sync_if_changes_pending()
 
                     timer.stop()
                     progress.close()
@@ -1173,6 +1196,24 @@ class ModernPomodoroWindow(QMainWindow):
             self.current_date = today
             self.update_stats()
             info_print(f"Stats refreshed for new day: {today}")
+
+    def reset_idle_sync_timer(self):
+        """Reset idle sync timer - call this whenever user activity is detected"""
+        if hasattr(self, 'idle_sync_timer'):
+            self.idle_sync_timer.start(self.idle_sync_timeout)
+
+    def perform_idle_sync(self):
+        """Perform sync if there are pending changes after idle timeout"""
+        debug_print("Idle timeout reached - checking for pending changes to sync")
+        try:
+            if hasattr(self, 'db_manager') and self.db_manager:
+                success = self.db_manager.sync_if_changes_pending()
+                if success:
+                    debug_print("Idle sync completed successfully")
+                else:
+                    debug_print("Idle sync failed or was skipped")
+        except Exception as e:
+            error_print(f"Error during idle sync: {e}")
 
     def reset_ui(self):
         """Reset UI to initial state"""

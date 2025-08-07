@@ -205,6 +205,9 @@ class GoogleDriveSync:
             with open(local_db_path, 'wb') as f:
                 f.write(file_io.getvalue())
 
+            # Fix auto-increment sequences to prevent ID collisions
+            self._fix_autoincrement_sequences(local_db_path)
+
             info_print(f"Downloaded database from Google Drive")
             return True
 
@@ -439,6 +442,56 @@ class GoogleDriveSync:
         except Exception as e:
             error_print(f"Failed to download JSON file by ID {file_id}: {e}")
             return None
+
+    def _fix_autoincrement_sequences(self, db_path: str):
+        """Fix SQLite auto-increment sequences to prevent ID collisions after database replacement"""
+        try:
+            import sqlite3
+            
+            # Connect to the database
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get list of tables that have auto-increment primary keys
+            tables_to_fix = ['sprints', 'projects', 'task_categories']
+            
+            for table_name in tables_to_fix:
+                try:
+                    # Get the maximum ID for this table
+                    cursor.execute(f"SELECT MAX(id) FROM {table_name}")
+                    max_id = cursor.fetchone()[0]
+                    
+                    if max_id is not None:
+                        # For INTEGER PRIMARY KEY (without AUTOINCREMENT), we need to prime the sequence
+                        # by inserting a dummy record with max_id+1, then deleting it
+                        next_id = max_id + 1
+                        
+                        if table_name == 'sprints':
+                            # Insert dummy sprint record
+                            cursor.execute(f"INSERT INTO {table_name} (id, project_id, task_category_id, task_description, start_time, completed) VALUES (?, 1, 1, 'DUMMY_RECORD', datetime('now'), 0)", (next_id,))
+                        elif table_name == 'projects':
+                            # Insert dummy project record  
+                            cursor.execute(f"INSERT INTO {table_name} (id, name, active) VALUES (?, 'DUMMY_PROJECT', 0)", (next_id,))
+                        elif table_name == 'task_categories':
+                            # Insert dummy task category record
+                            cursor.execute(f"INSERT INTO {table_name} (id, name, active) VALUES (?, 'DUMMY_CATEGORY', 0)", (next_id,))
+                        
+                        # Delete the dummy record - this primes the auto-increment
+                        cursor.execute(f"DELETE FROM {table_name} WHERE id = ?", (next_id,))
+                        debug_print(f"Fixed auto-increment sequence for {table_name}: primed to start from {next_id}")
+                    else:
+                        debug_print(f"No records in {table_name}, skipping sequence fix")
+                        
+                except sqlite3.Error as e:
+                    error_print(f"Failed to fix sequence for table {table_name}: {e}")
+                    continue
+            
+            conn.commit()
+            conn.close()
+            debug_print("Auto-increment sequences fixed successfully")
+            
+        except Exception as e:
+            error_print(f"Failed to fix auto-increment sequences: {e}")
 
 class GoogleDriveManager:
     """High-level manager for Google Drive database synchronization"""

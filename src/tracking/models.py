@@ -227,14 +227,7 @@ class DatabaseManager(ProgressCapableMixin):
             print(f"Google Drive integration not available: {e}")
 
     def get_session(self):
-        # Auto-sync before database operations if Google Drive is enabled (but not during initialization)
-        if (not self._initializing and
-            self.google_drive_manager and
-            self.google_drive_manager.is_enabled()):
-            self.google_drive_manager.auto_sync()
-            # Ensure all tables exist after sync
-            Base.metadata.create_all(self.engine)
-
+        # No automatic sync - sync only happens on idle timer, user request, or app exit
         return self.Session()
 
     def _run_sync_with_timeout(self, timeout_seconds=30):
@@ -270,55 +263,32 @@ class DatabaseManager(ProgressCapableMixin):
             return False
 
     def _sync_after_commit(self):
-        """Trigger non-blocking sync to Google Drive after database commits"""
-        debug_print("_sync_after_commit called")
+        """Record that sync is needed - actual sync will happen on idle timer, user request, or app exit"""
+        debug_print("_sync_after_commit called - sync will happen on next idle/manual/exit trigger")
+        # No immediate sync - just ensure operations are tracked for later sync
+
+    def has_pending_changes(self):
+        """Check if there are local changes that need to be synced"""
+        if not self.operation_tracker:
+            return False
         
-        if not self.google_drive_manager:
-            debug_print("No google_drive_manager available - skipping sync")
-            return
+        pending_ops = self.operation_tracker.get_unsynced_operations()
+        has_changes = len(pending_ops) > 0
+        debug_print(f"Checking for pending changes: {len(pending_ops)} operations pending")
+        return has_changes
+
+    def sync_if_changes_pending(self):
+        """Sync to Google Drive only if there are pending local changes"""
+        if not self.google_drive_manager or not self.google_drive_manager.is_enabled():
+            debug_print("Google Drive sync not available - skipping idle sync")
+            return False
             
-        if not self.google_drive_manager.is_enabled():
-            debug_print("Google Drive sync is disabled - skipping sync")
-            return
+        if not self.has_pending_changes():
+            debug_print("No pending changes - skipping idle sync")
+            return True
             
-        debug_print("Google Drive manager is enabled - starting background sync")
-        
-        # Clean up finished threads first
-        self._cleanup_finished_sync_threads()
-
-        # Start background sync to avoid blocking UI
-        import threading
-        import time
-
-        def background_sync():
-            try:
-                debug_print("Starting background sync to Google Drive...")
-                start_time = time.time()
-
-                # Run sync with timeout to prevent hanging
-                success = self._run_sync_with_timeout(timeout_seconds=30)
-
-                elapsed = time.time() - start_time
-                if success:
-                    info_print(f"Database changes synced to Google Drive ({elapsed:.1f}s)")
-                else:
-                    error_print(f"Failed to sync database changes to Google Drive ({elapsed:.1f}s)")
-
-            except Exception as e:
-                elapsed = time.time() - start_time if 'start_time' in locals() else 0
-                error_print(f"Error syncing to Google Drive ({elapsed:.1f}s): {e}")
-            finally:
-                # Remove this thread from tracking list
-                try:
-                    self._background_sync_threads.remove(threading.current_thread())
-                except ValueError:
-                    pass  # Thread might have been cleaned up already
-
-            # Run sync in background thread (non-daemon but with timeouts to prevent hanging)
-            sync_thread = threading.Thread(target=background_sync, daemon=False, name="GoogleDriveSync")
-            self._background_sync_threads.append(sync_thread)
-            sync_thread.start()
-            debug_print(f"Background sync thread started (active threads: {len(self._background_sync_threads)})")
+        debug_print("Pending changes found - starting idle sync...")
+        return self._run_sync_with_timeout(timeout_seconds=30)
 
     def _cleanup_finished_sync_threads(self):
         """Remove finished sync threads from tracking list"""
@@ -1060,6 +1030,9 @@ class DatabaseManager(ProgressCapableMixin):
                     # Copy merged database back to local (will re-create operation_log on next access)
                     shutil.copy2(remote_db_path, self.db_path)
 
+                    # Fix auto-increment sequences to prevent ID collisions
+                    self._fix_autoincrement_sequences_after_replace()
+
                     # Recreate engine/session since database was replaced
                     self.engine = create_engine(f'sqlite:///{self.db_path}')
                     self.Session = sessionmaker(bind=self.engine)
@@ -1456,6 +1429,58 @@ class DatabaseManager(ProgressCapableMixin):
         except Exception as e:
             debug_print(f"Error during temp file cleanup: {e}")
             # Not critical - continue
+
+    def _fix_autoincrement_sequences_after_replace(self):
+        """Fix SQLite auto-increment sequences to prevent ID collisions after database replacement"""
+        try:
+            import sqlite3
+            
+            debug_print("Fixing auto-increment sequences after database replacement...")
+            
+            # Connect to the database
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get list of tables that have auto-increment primary keys
+            tables_to_fix = ['sprints', 'projects', 'task_categories']
+            
+            for table_name in tables_to_fix:
+                try:
+                    # Get the maximum ID for this table
+                    cursor.execute(f"SELECT MAX(id) FROM {table_name}")
+                    max_id = cursor.fetchone()[0]
+                    
+                    if max_id is not None:
+                        # For INTEGER PRIMARY KEY (without AUTOINCREMENT), we need to prime the sequence
+                        # by inserting a dummy record with max_id+1, then deleting it
+                        next_id = max_id + 1
+                        
+                        if table_name == 'sprints':
+                            # Insert dummy sprint record
+                            cursor.execute(f"INSERT INTO {table_name} (id, project_id, task_category_id, task_description, start_time, completed) VALUES (?, 1, 1, 'DUMMY_RECORD', datetime('now'), 0)", (next_id,))
+                        elif table_name == 'projects':
+                            # Insert dummy project record  
+                            cursor.execute(f"INSERT INTO {table_name} (id, name, active) VALUES (?, 'DUMMY_PROJECT', 0)", (next_id,))
+                        elif table_name == 'task_categories':
+                            # Insert dummy task category record
+                            cursor.execute(f"INSERT INTO {table_name} (id, name, active) VALUES (?, 'DUMMY_CATEGORY', 0)", (next_id,))
+                        
+                        # Delete the dummy record - this primes the auto-increment
+                        cursor.execute(f"DELETE FROM {table_name} WHERE id = ?", (next_id,))
+                        debug_print(f"Fixed auto-increment sequence for {table_name}: primed to start from {next_id}")
+                    else:
+                        debug_print(f"No records in {table_name}, skipping sequence fix")
+                        
+                except sqlite3.Error as e:
+                    error_print(f"Failed to fix sequence for table {table_name}: {e}")
+                    continue
+            
+            conn.commit()
+            conn.close()
+            debug_print("Auto-increment sequences fixed successfully")
+            
+        except Exception as e:
+            error_print(f"Failed to fix auto-increment sequences: {e}")
 
     def _perform_backup_if_needed(self):
         """Perform database backup if needed (daily/monthly/yearly)"""
