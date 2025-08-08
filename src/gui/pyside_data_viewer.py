@@ -1033,6 +1033,10 @@ class PySideDataViewerWindow(QWidget):
                     success_dialog.exec()
                     # Refresh the view
                     self.load_data()
+                    
+                    # Notify parent window to update stats if deletion affects today's sprints
+                    if hasattr(self.parent, 'update_stats'):
+                        self.parent.update_stats()
                 else:
                     QMessageBox.warning(self, "Error", "Failed to delete sprint.")
                     
