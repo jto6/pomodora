@@ -308,11 +308,11 @@ class DatabaseManager(ProgressCapableMixin):
             from gui.components.sync_progress_dialog import show_sync_progress
         except ImportError:
             # Fallback to direct sync if GUI components not available
-            return self._leader_election_sync()
+            return self._leader_election_sync(force_sync=True)
         
         def sync_operation():
             """The actual sync operation to run"""
-            return self._leader_election_sync()
+            return self._leader_election_sync(force_sync=True)  # Force sync for manual operations
         
         # Show progress dialog and perform sync
         return show_sync_progress(
@@ -931,8 +931,12 @@ class DatabaseManager(ProgressCapableMixin):
         finally:
             session.close()
 
-    def _leader_election_sync(self) -> bool:
-        """Sync database using leader election and proper merge operations"""
+    def _leader_election_sync(self, force_sync=False) -> bool:
+        """Sync database using leader election and proper merge operations
+        
+        Args:
+            force_sync: If True, always perform sync even without local changes
+        """
         try:
             # Use leader election to determine who gets to sync
             if not self._acquire_database_sync_lock():
@@ -944,11 +948,17 @@ class DatabaseManager(ProgressCapableMixin):
 
                 # Check if we have any unsynced operations
                 unsynced_ops = self.operation_tracker.get_unsynced_operations()
-                if not unsynced_ops:
+                if not unsynced_ops and not force_sync:
                     debug_print("No unsynced operations, sync not needed")
                     return True
-
-                info_print(f"Found {len(unsynced_ops)} unsynced operations to merge")
+                
+                if force_sync and not unsynced_ops:
+                    debug_print("Manual sync: no local changes, but checking for remote updates...")
+                
+                if unsynced_ops:
+                    info_print(f"Found {len(unsynced_ops)} unsynced operations to merge")
+                else:
+                    info_print("Manual sync: downloading remote database to check for updates")
 
                 # Download current remote database to a temporary location
                 import tempfile
@@ -1009,7 +1019,10 @@ class DatabaseManager(ProgressCapableMixin):
                     # Re-initialize operation tracker to recreate operation_log table locally
                     self.operation_tracker = OperationTracker(self.db_path)
 
-                    info_print(f"✓ Successfully merged and synced {len(unsynced_ops)} operations")
+                    if unsynced_ops:
+                        info_print(f"✓ Successfully merged and synced {len(unsynced_ops)} operations")
+                    else:
+                        info_print("✓ Successfully downloaded and applied remote database updates")
                     return True
 
                 finally:
