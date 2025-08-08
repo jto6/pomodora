@@ -103,6 +103,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.current_project_id = None
         self.current_task_category_id = None
         self.current_task_description = None
+        self.sprint_start_time = None  # Preserve start time for completion
 
         # Field synchronization tracking
         self._last_project_text = ""
@@ -904,7 +905,8 @@ class ModernPomodoroWindow(QMainWindow):
             self.current_task_description = self.task_input.text().strip() or None
 
             self.pomodoro_timer.start_sprint()
-            debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}', Start time: {self.pomodoro_timer.start_time}")
+            self.sprint_start_time = self.pomodoro_timer.start_time  # Preserve for completion
+            debug_print(f"Sprint started - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}', Start time: {self.sprint_start_time}")
             self.qt_timer.start(1000)  # Update every second
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)
@@ -964,6 +966,7 @@ class ModernPomodoroWindow(QMainWindow):
 
             debug_print(f"New sprint started with same parameters - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
+            self.sprint_start_time = self.pomodoro_timer.start_time  # Preserve for completion
             self.qt_timer.start(1000)
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)
@@ -1071,11 +1074,16 @@ class ModernPomodoroWindow(QMainWindow):
                 project_name = project.name if project else "Unknown"
                 debug_print(f"Project name resolved: {project_name}")
 
-                # Use the timer's actual start time and calculate duration
-                start_time = self.pomodoro_timer.start_time
+                # Use the preserved sprint start time and calculate duration
+                start_time = self.sprint_start_time
                 end_time = datetime.now()
+                
+                if start_time is None:
+                    error_print("Sprint start time is None, cannot complete sprint")
+                    return
+                    
                 actual_duration = (end_time - start_time).total_seconds()
-                debug_print(f"Using timer's actual start time: {start_time}")
+                debug_print(f"Using preserved sprint start time: {start_time}")
                 debug_print(f"Calculated duration: {actual_duration}s, start_time: {start_time}")
 
                 # Ensure task description is not None
@@ -1115,6 +1123,9 @@ class ModernPomodoroWindow(QMainWindow):
             self.reset_ui()
             self.state_label.setText("Sprint Completed! 🎉")
             self.update_stats()
+            
+            # Clear preserved sprint start time after successful completion
+            self.sprint_start_time = None
             debug_print("Sprint completion finished")
             
             # Exit compact mode when completing sprint
@@ -1127,6 +1138,9 @@ class ModernPomodoroWindow(QMainWindow):
             self.pomodoro_timer.stop()
             self.qt_timer.stop()
             self.reset_ui()
+            
+            # Clear preserved sprint start time even on error
+            self.sprint_start_time = None
             
             # Exit compact mode even when there's an error
             if self.compact_mode:
@@ -1213,6 +1227,9 @@ class ModernPomodoroWindow(QMainWindow):
 
         # Clear task description field
         self.task_input.clear()
+        
+        # Clear sprint start time
+        self.sprint_start_time = None
 
         # Set timer display to current sprint duration
         sprint_minutes = self.pomodoro_timer.sprint_duration // 60
