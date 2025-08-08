@@ -98,6 +98,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.system_tray.init_system_tray()
 
         self.init_ui()
+        self.setup_form_validation()
         self.setup_sprint_shortcuts()
         self.create_menu_bar()
         self.load_settings()  # Load settings before applying styling
@@ -625,6 +626,27 @@ class ModernPomodoroWindow(QMainWindow):
 
         debug_print("Setup Ctrl+S/Ctrl+C shortcuts for sprint operations")
 
+    def setup_form_validation(self):
+        """Set up form validation to enable/disable start button based on task description"""
+        # Connect text change event to validation
+        self.task_input.textChanged.connect(self.validate_form)
+        
+        # Perform initial validation
+        self.validate_form()
+        
+    def validate_form(self):
+        """Validate form and enable/disable start button based on task description"""
+        # Only validate if timer is stopped (don't interfere with running timer)
+        if self.pomodoro_timer.get_state() == TimerState.STOPPED:
+            task_description = self.task_input.text().strip()
+            has_description = bool(task_description)
+            
+            # Update start button state
+            self.start_button.setEnabled(has_description)
+            self.compact_start_button.setEnabled(has_description)
+            
+            debug_print(f"Form validation: task='{task_description}', enabled={has_description}")
+
     def create_menu_bar(self):
         """Create menu bar with all application features"""
         menubar = self.menuBar()
@@ -859,10 +881,16 @@ class ModernPomodoroWindow(QMainWindow):
         trace_print(f"Timer remaining: {self.pomodoro_timer.get_time_remaining()}s, Task: {self.current_task_description}")
 
         if self.pomodoro_timer.state == TimerState.STOPPED:
+            # Validate task description before starting
+            task_description = self.task_input.text().strip()
+            if not task_description:
+                debug_print("Cannot start sprint: Task description is required")
+                return
+            
             # Start new sprint
             self.current_project_id = self.project_combo.currentData()
             self.current_task_category_id = self.task_category_combo.currentData()
-            self.current_task_description = self.task_input.text().strip() or None
+            self.current_task_description = task_description
 
             self.pomodoro_timer.start_sprint()
             self.sprint_start_time = self.pomodoro_timer.start_time  # Preserve for completion
@@ -1195,6 +1223,9 @@ class ModernPomodoroWindow(QMainWindow):
         sprint_minutes = self.pomodoro_timer.sprint_duration // 60
         self.time_label.setText(f"{sprint_minutes:02d}:00")
         self.state_label.setText("Ready to Focus")
+        
+        # Validate form to set proper button state
+        self.validate_form()
 
     def update_stats(self):
         """Update today's statistics"""
