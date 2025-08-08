@@ -1194,6 +1194,8 @@ class ModernPomodoroWindow(QMainWindow):
                 success = self.db_manager.sync_if_changes_pending()
                 if success:
                     debug_print("Idle sync completed successfully")
+                    # Update stats in case remote changes were downloaded
+                    self.update_stats()
                 else:
                     debug_print("Idle sync failed or was skipped")
         except Exception as e:
@@ -1403,6 +1405,9 @@ class ModernPomodoroWindow(QMainWindow):
             success = self.db_manager.sync_with_progress(self)
             
             if success:
+                # Update stats to reflect any new sprints downloaded from remote
+                self.update_stats()
+                
                 self.show_sync_dialog(
                     "Sync Complete", 
                     "Database successfully synced with Google Drive.",
