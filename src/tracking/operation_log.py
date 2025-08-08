@@ -182,23 +182,14 @@ class DatabaseMerger:
         try:
             record_data = json.loads(record_data_json)
 
-            # Check if record already exists (conflict resolution)
-            existing = remote_session.execute(
-                text(f"SELECT id FROM {table_name} WHERE id = :id"),
-                {"id": record_id}
-            ).fetchone()
-
-            if existing:
-                debug_print(f"Record {table_name}[{record_id}] already exists in remote, skipping INSERT")
-                return True
-
-            # Build INSERT query
-            columns = list(record_data.keys())
-            placeholders = [f":{col}" for col in columns]
-            query = text(f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})")
+            # Always let database auto-assign IDs for INSERT operations
+            # This prevents all ID conflicts and follows database best practices
+            processed_data = record_data.copy()
+            processed_data.pop('id', None)  # Always remove ID to force auto-assignment
+            
+            debug_print(f"Inserting {table_name} record with auto-assigned ID (original local ID was {record_id})")
 
             # Handle datetime conversion for SQLite
-            processed_data = record_data.copy()
             for key, value in processed_data.items():
                 if isinstance(value, str) and key.endswith('_at'):
                     # Keep ISO format datetime strings as-is for SQLite
@@ -207,8 +198,13 @@ class DatabaseMerger:
                     # Keep ISO format datetime strings as-is for SQLite
                     pass
 
+            # Build INSERT query without ID column
+            columns = list(processed_data.keys())
+            placeholders = [f":{col}" for col in columns]
+            query = text(f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})")
+
             remote_session.execute(query, processed_data)
-            debug_print(f"Successfully inserted {table_name}[{record_id}] into remote")
+            debug_print(f"Successfully inserted {table_name} record with auto-assigned ID")
             return True
 
         except Exception as e:
