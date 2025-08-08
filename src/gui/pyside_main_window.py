@@ -1339,7 +1339,7 @@ class ModernPomodoroWindow(QMainWindow):
 
     def export_to_excel(self):
         """Export data to Excel file"""
-        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from PySide6.QtWidgets import QFileDialog
         try:
             # Get save location
             file_path, _ = QFileDialog.getSaveFileName(
@@ -1364,10 +1364,13 @@ class ModernPomodoroWindow(QMainWindow):
                     min_duration=0.5  # Show progress for exports taking > 0.5s
                 )
 
-                QMessageBox.information(self, "Export Complete",
-                                      f"Data exported successfully to:\n{exported_file}")
+                self.show_sync_dialog("Export Complete", 
+                                      f"Data exported successfully to:\n{exported_file}",
+                                      "information")
         except Exception as e:
-            QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{str(e)}")
+            self.show_sync_dialog("Export Error", 
+                                 f"Failed to export data:\n{str(e)}",
+                                 "critical")
 
     def open_data_viewer(self):
         """Open data viewer window"""
@@ -1376,8 +1379,9 @@ class ModernPomodoroWindow(QMainWindow):
             self.data_viewer = PySideDataViewerWindow(self, self.db_manager)
             self.data_viewer.show()
         except Exception as e:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Error", f"Failed to open data viewer:\n{str(e)}")
+            self.show_sync_dialog("Error", 
+                                 f"Failed to open data viewer:\n{str(e)}",
+                                 "critical")
 
     def manage_activity_classifications(self):
         """Open comprehensive activity classifications dialog"""
@@ -1419,17 +1423,17 @@ class ModernPomodoroWindow(QMainWindow):
 
     def show_sync_dialog(self, title: str, message: str, dialog_type: str = "information"):
         """Show a properly sized sync status dialog with theme support"""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QFrame
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QFrame, QHBoxLayout
         from PySide6.QtCore import Qt
         from PySide6.QtGui import QIcon, QPixmap
 
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         dialog.setModal(True)
-        dialog.setFixedSize(400, 160)
+        dialog.setFixedSize(400, 180)
         
         # Apply theme-aware styling
-        if hasattr(self, 'current_theme') and self.current_theme == 'dark':
+        if hasattr(self, 'theme_mode') and self.theme_mode == 'dark':
             dialog.setStyleSheet("""
                 QDialog {
                     background-color: #2b2b2b;
@@ -1486,12 +1490,34 @@ class ModernPomodoroWindow(QMainWindow):
         layout.setSpacing(16)
         layout.setContentsMargins(20, 20, 20, 20)
 
+        # Content area with icon and message
+        content_layout = QHBoxLayout()
+        
+        # Add icon based on dialog type
+        icon_label = QLabel()
+        icon_text = ""
+        if dialog_type == "information":
+            icon_text = "✅"  # Success
+        elif dialog_type == "warning":
+            icon_text = "⚠️"   # Warning
+        elif dialog_type == "critical":
+            icon_text = "❌"  # Error
+        
+        if icon_text:
+            icon_label.setText(icon_text)
+            icon_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+            icon_label.setFixedSize(32, 32)
+            icon_label.setStyleSheet("font-size: 24px;")
+            content_layout.addWidget(icon_label)
+
         # Message label with word wrap and proper sizing
         label = QLabel(message)
         label.setWordWrap(True)
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         label.setMinimumHeight(50)
-        layout.addWidget(label)
+        content_layout.addWidget(label, 1)  # Give it stretch factor to use remaining space
+        
+        layout.addLayout(content_layout)
 
         # OK button
         ok_button = QPushButton("OK")
