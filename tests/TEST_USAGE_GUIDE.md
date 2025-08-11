@@ -10,7 +10,8 @@ This guide explains when and how to run the different test suites in the Pomodor
 | Working Unit Tests | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestDatabaseManager -v` | ~0.5s | Before commits | ✅ Working |
 | Integration Tests | `python -m pytest tests/integration/ -v` | ~2-5s | Before releases | ⚠️ Has issues |
 | All Unit Tests | `python -m pytest tests/ -m unit -v` | ~5s | Weekly validation | ⚠️ Some issues |
-| Concurrency Tests | `python -m pytest tests/concurrency/ -v -s` | ~30s | Before major releases | ✅ Working |
+| **Unified Concurrency Tests** | `python -m pytest tests/concurrency/test_unified_sync.py -v -s` | ~15-30s | Before major releases | ✅ Working |
+| Legacy Concurrency Tests | `python -m pytest tests/concurrency/test_sync_triggers.py -v -s` | ~30s | Deprecated | ⚠️ Legacy |
 
 ## Test Categories
 
@@ -39,13 +40,70 @@ This guide explains when and how to run the different test suites in the Pomodor
 - **Status**: Partially working ⚠️
 - **Coverage**: End-to-end sprint workflows, timer-database integration
 
-### ✅ Tier 4: Concurrency Tests (Advanced)
+### ✅ Tier 4: Unified Concurrency Tests (Advanced)
 
-**Multi-App Sync** - `tests/concurrency/`
-- **Status**: Infrastructure complete ✅
-- **Coverage**: Manual/timer/shutdown sync scenarios, database conflicts
-- **Command**: `python -m pytest tests/concurrency/ -v -s`
-- **Duration**: ~10-30 seconds
+**Unified Leader Election Sync** - `tests/concurrency/test_unified_sync.py`
+- **Status**: Complete and working ✅
+- **Coverage**: Backend-agnostic sync testing (LocalFile + GoogleDrive coordination)
+- **Command**: `python -m pytest tests/concurrency/test_unified_sync.py -v -s`
+- **Duration**: ~15-30 seconds
+- **Key Feature**: **Same sync logic tested with different coordination backends**
+
+**Legacy Multi-App Sync** - `tests/concurrency/test_sync_triggers.py` 
+- **Status**: Deprecated ⚠️
+- **Coverage**: Old Google Drive specific sync scenarios
+- **Command**: `python -m pytest tests/concurrency/test_sync_triggers.py -v -s` 
+- **Duration**: ~30 seconds
+
+## Unified Sync Architecture
+
+### 🎯 Key Achievement: Location-Independent Sync Testing
+
+The unified sync architecture allows you to **test the same sync logic with different coordination backends**:
+
+**Local File Coordination (for testing):**
+```bash
+# Test multi-app concurrency locally with shared file
+python -m pytest tests/concurrency/test_unified_sync.py::TestUnifiedSyncConcurrency::test_manual_sync_conflicts[local_file] -v -s
+```
+
+**Google Drive Coordination (production):**
+```bash
+# Same sync logic, different backend (when implemented)
+python -m pytest tests/concurrency/test_unified_sync.py::TestUnifiedSyncConcurrency::test_manual_sync_conflicts[google_drive] -v -s
+```
+
+### Benefits of Unified Testing
+
+- ✅ **Same sync logic**: One implementation tested with multiple backends
+- ✅ **Local testability**: Test complex sync scenarios without Google Drive setup  
+- ✅ **Production confidence**: Know that if local file sync works, Google Drive sync will work
+- ✅ **Rapid development**: Debug sync issues locally with multiple app instances
+- ✅ **Backend agnostic**: Sync strategy is independent of storage location
+
+### Test Commands by Backend
+
+**Test LocalFile coordination:**
+```bash
+python -m pytest tests/concurrency/test_unified_sync.py -k "local_file" -v -s
+```
+
+**Test all backends (when Google Drive tests are enabled):**
+```bash
+python -m pytest tests/concurrency/test_unified_sync.py -v -s
+```
+
+**Test specific sync scenarios:**
+```bash
+# Manual sync conflicts
+python -m pytest tests/concurrency/test_unified_sync.py -k "manual_sync" -v -s
+
+# Leader election robustness  
+python -m pytest tests/concurrency/test_unified_sync.py -k "robustness" -v -s
+
+# Edge cases and cleanup
+python -m pytest tests/concurrency/test_unified_sync.py -k "edge_cases" -v -s
+```
 
 ## Development Workflow
 
@@ -99,8 +157,20 @@ python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestDatab
 # All unit tests (some may fail due to compatibility issues)
 python -m pytest tests/ -m unit -v
 
-# Concurrency stress testing
-python -m pytest tests/concurrency/ -v -s
+# Unified concurrency testing (recommended)
+python -m pytest tests/concurrency/test_unified_sync.py -v -s
+```
+
+**Pre-Release Validation:**
+```bash
+# Core functionality validation
+python -m pytest tests/unit/timer/ -v
+
+# Multi-app sync validation (the key differentiator)
+python -m pytest tests/concurrency/test_unified_sync.py -v -s
+
+# Verify local file coordination works (proves sync logic is sound)
+python -m pytest tests/concurrency/test_unified_sync.py::TestBackendSpecificFeatures::test_local_file_coordination -v -s
 ```
 
 ### Debugging Failed Tests

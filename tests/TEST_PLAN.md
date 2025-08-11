@@ -301,12 +301,7 @@ tests/
 │       └── test_google_drive_features.py
 │
 ├── concurrency/                  # Tier 4: Concurrency Tests (20-35min)
-│   ├── test_concurrent_sprints.py
-│   ├── test_leader_election.py
-│   ├── test_database_merge.py
-│   ├── test_sync_triggers.py         # Manual, timer, and shutdown sync conflicts
-│   ├── test_sync_conflicts.py
-│   └── test_high_frequency_ops.py
+│   └── test_unified_sync.py         # Unified leader election sync with multiple backends
 │
 ├── system/                       # Tier 5: System Tests (45-60min)
 │   ├── test_cross_platform.py
@@ -333,7 +328,7 @@ tests/
     ├── database_helpers.py       # Database setup and teardown
     ├── gui_test_helpers.py       # GUI testing utilities
     ├── audio_mocks.py           # Audio system mocking
-    ├── sync_simulators.py       # Multi-app sync simulation
+    ├── unified_sync_simulators.py # Unified multi-app sync simulation
     └── performance_monitors.py   # Performance measurement tools
 ```
 
@@ -375,11 +370,11 @@ def temp_settings():
         yield settings
 ```
 
-#### Multi-App Simulation
+#### Unified Multi-App Simulation
 ```python
-# helpers/sync_simulators.py
-class MultiAppSimulator:
-    """Simulates multiple Pomodora instances for concurrency testing"""
+# helpers/unified_sync_simulators.py
+class UnifiedSyncSimulator:
+    """Simulates multiple Pomodora instances using unified leader election sync"""
 
     def __init__(self, num_instances=3):
         self.instances = []
