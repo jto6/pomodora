@@ -50,8 +50,10 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             self.sync_strategy = self.sync_config.get_sync_strategy()
             
             if needs_coordination:
+                debug_print(f"Creating coordination backend for strategy: {self.sync_strategy}")
                 self.coordination_backend = self.sync_config.create_coordination_backend()
                 if self.coordination_backend:
+                    debug_print(f"Coordination backend created: {type(self.coordination_backend).__name__}")
                     self.sync_manager = LeaderElectionSyncManager(
                         self.coordination_backend, 
                         str(self.db_path)
@@ -144,7 +146,7 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             backup_base_dir = self.db_path.parent / 'Backup'
             self.backup_manager = DatabaseBackupManager(str(self.db_path), str(backup_base_dir))
         
-        debug_print(f"Backup manager initialized: {self.backup_manager.backup_base_dir}")
+        debug_print(f"Backup manager initialized: {self.backup_manager.backup_dir}")
     
     def _initialize_default_data(self) -> None:
         """Initialize default projects and categories if database is empty"""

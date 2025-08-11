@@ -103,6 +103,7 @@ class SyncConfiguration:
         """Create appropriate coordination backend based on configuration"""
         try:
             strategy = self.get_sync_strategy()
+            debug_print(f"Creating coordination backend for strategy: {strategy}")
             
             if strategy == 'local_only':
                 debug_print("Using local-only sync strategy (no coordination backend)")
@@ -114,6 +115,7 @@ class SyncConfiguration:
             
             backend_config = self.get_coordination_backend_config()
             backend_type = backend_config.get('type', 'local_file')
+            debug_print(f"Backend type: {backend_type}")
             
             if backend_type == 'local_file':
                 local_config = backend_config.get('local_file', {})
@@ -131,8 +133,15 @@ class SyncConfiguration:
                 credentials_path = google_config.get('credentials_path', 'credentials.json')
                 folder_name = google_config.get('folder_name', 'TimeTracking')
                 
-                debug_print(f"Creating GoogleDriveBackend: {folder_name}")
-                return GoogleDriveBackend(credentials_path, folder_name)
+                debug_print(f"Creating GoogleDriveBackend: folder={folder_name}, credentials={credentials_path}")
+                backend = GoogleDriveBackend(credentials_path, folder_name)
+                
+                # Check if it's available
+                if not backend.is_available():
+                    error_print(f"GoogleDriveBackend not available - credentials or connectivity issue")
+                    return None
+                
+                return backend
                 
             else:
                 error_print(f"Unknown coordination backend type: {backend_type}")
