@@ -15,82 +15,15 @@ from utils.logging import debug_print, error_print, info_print, trace_print
 
 class SyncConfiguration:
     """
-    Configuration manager for database sync strategies.
-    Handles migration from legacy settings to new unified config.
+    Configuration manager for unified database sync strategies.
+    Handles leader election sync with pluggable coordination backends.
     """
     
     def __init__(self):
         self.settings = get_local_settings()
         debug_print(f"SyncConfiguration.__init__: loaded sync_strategy='{self.settings.get('sync_strategy')}'")
-        self._migrate_legacy_settings()
+        # No migration needed - unified configuration only
     
-    def _migrate_legacy_settings(self) -> None:
-        """Migrate legacy settings to new unified configuration"""
-        try:
-            # Check if migration is needed
-            database_type = self.settings.get('database_type', 'local')
-            google_drive_enabled = self.settings.get('google_drive_enabled', False)
-            sync_strategy = self.settings.get('sync_strategy')
-            
-            # If new settings already exist, no migration needed
-            if sync_strategy and sync_strategy != 'local_only':
-                debug_print(f"New sync configuration already exists: sync_strategy='{sync_strategy}'")
-                return
-            
-            # Migrate legacy settings
-            migrated = False
-            
-            if database_type == 'google_drive' or google_drive_enabled:
-                # Check if Google Drive credentials actually exist before migrating
-                credentials_path = self.settings.get('google_credentials_path', 'credentials.json')
-                
-                if Path(credentials_path).exists():
-                    # Legacy Google Drive configuration with valid credentials
-                    info_print("Migrating legacy Google Drive configuration")
-                    self.settings.set('sync_strategy', 'leader_election')
-                    
-                    coordination_config = self.settings.get('coordination_backend', {})
-                    coordination_config['type'] = 'google_drive'
-                    
-                    google_config = coordination_config.get('google_drive', {})
-                    google_config['credentials_path'] = credentials_path
-                    google_config['folder_name'] = self.settings.get('google_drive_folder', 'TimeTracking')
-                    
-                    coordination_config['google_drive'] = google_config
-                    self.settings.set('coordination_backend', coordination_config)
-                    migrated = True
-                else:
-                    # Legacy Google Drive config but no credentials - disable it
-                    info_print("Legacy Google Drive configuration found but no credentials - disabling")
-                    self.settings.set('sync_strategy', 'local_only')
-                    self.settings.set('google_drive_enabled', False)
-                    migrated = True
-                
-            elif database_type == 'local':
-                # Legacy local database - check if it should be shared
-                database_local_path = self.settings.get('database_local_path')
-                if database_local_path and not database_local_path.startswith(str(Path.home())):
-                    # Path outside user directory might be shared
-                    info_print("Migrating legacy shared database configuration")
-                    self.settings.set('sync_strategy', 'leader_election')
-                    
-                    coordination_config = self.settings.get('coordination_backend', {})
-                    coordination_config['type'] = 'local_file'
-                    
-                    local_config = coordination_config.get('local_file', {})
-                    local_config['shared_db_path'] = database_local_path
-                    
-                    coordination_config['local_file'] = local_config
-                    self.settings.set('coordination_backend', coordination_config)
-                    migrated = True
-            
-            if migrated:
-                info_print("Legacy settings migration completed")
-            else:
-                debug_print("No legacy settings migration needed")
-                
-        except Exception as e:
-            error_print(f"Error migrating legacy settings: {e}")
     
     def get_sync_strategy(self) -> str:
         """Get the sync strategy: 'local_only' or 'leader_election'"""

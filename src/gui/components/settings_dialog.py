@@ -36,16 +36,14 @@ class SettingsDialog(QDialog):
         self.current_volume = settings.get("alarm_volume", 0.7)
         self.current_sprint_alarm = settings.get("sprint_alarm", "gentle_chime")
         self.current_break_alarm = settings.get("break_alarm", "urgent_alert")
-        self.current_db_type = settings.get("database_type", "local")
-        self.current_db_path = settings.get("database_local_path", "")
-        self.current_credentials = settings.get("google_credentials_path", "credentials.json")
-        self.current_gdrive_folder = settings.get("google_drive_folder", "TimeTracking")
+        # Database settings now managed through unified sync configuration
+        # TODO: Create proper unified sync configuration UI
 
         # Create UI sections
         self.create_theme_section(layout)
         self.create_timer_section(layout)
         self.create_alarm_section(layout)
-        self.create_database_section(layout)
+        # self.create_database_section(layout)  # Disabled - using unified sync config
         self.create_button_section(layout)
 
     def create_theme_section(self, layout):
@@ -334,8 +332,7 @@ class SettingsDialog(QDialog):
             from tracking.local_settings import get_local_settings
             settings = get_local_settings()
 
-            # Determine database type
-            db_type = "local" if self.db_local_radio.isChecked() else "google_drive"
+            # Database type determined by unified sync configuration
             theme_mode = self.theme_combo.currentText().lower()
 
             # Save all settings to local config
@@ -347,11 +344,7 @@ class SettingsDialog(QDialog):
                 "alarm_volume": self.volume_slider.value() / 100.0,
                 "sprint_alarm": self.sprint_alarm_combo.currentData(),
                 "break_alarm": self.break_alarm_combo.currentData(),
-                "database_type": db_type,
-                "database_local_path": self.local_path_input.text().strip(),
-                "google_credentials_path": self.credentials_input.text().strip() or "credentials.json",
-                "google_drive_folder": self.gdrive_folder_input.text().strip() or "TimeTracking",
-                "google_drive_enabled": not self.db_local_radio.isChecked()
+                # Database settings managed through unified sync configuration
             })
 
             # Apply settings immediately to parent window
