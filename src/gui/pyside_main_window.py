@@ -28,40 +28,9 @@ class ModernPomodoroWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        # Initialize database manager with configurable location
-        from tracking.local_settings import get_local_settings
-        settings = get_local_settings()
-        db_type = settings.get('database_type', 'local')
-
-        if db_type == 'local':
-            db_path = settings.get('database_local_path', '')
-            if not db_path:
-                # Use default path if not configured
-                from pathlib import Path
-                config_dir = Path.home() / '.config' / 'pomodora'
-                config_dir.mkdir(parents=True, exist_ok=True)
-                db_dir = config_dir / 'database'
-                db_dir.mkdir(parents=True, exist_ok=True)
-                db_path = str(db_dir / 'pomodora.db')
-            else:
-                # Ensure the path includes the database filename
-                from pathlib import Path
-                db_path = Path(db_path)
-                if db_path.is_dir():
-                    db_path = db_path / 'pomodora.db'
-                # Create parent directories
-                db_path.parent.mkdir(parents=True, exist_ok=True)
-                db_path = str(db_path)
-            self.db_manager = DatabaseManager(db_path)
-        else:
-            # For Google Drive, still use a local cache file
-            from pathlib import Path
-            config_dir = Path.home() / '.config' / 'pomodora'
-            config_dir.mkdir(parents=True, exist_ok=True)
-            cache_dir = config_dir / 'cache'
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            cache_path = str(cache_dir / 'pomodora.db')
-            self.db_manager = DatabaseManager(cache_path)
+        # Initialize database manager using unified configuration system
+        # The UnifiedDatabaseManager will handle all path and sync strategy determination
+        self.db_manager = DatabaseManager()
         info_print("Database initialized")
         # Default projects/categories are initialized automatically by DatabaseManager if database is empty
         info_print("Default projects and categories checked")
@@ -673,11 +642,9 @@ class ModernPomodoroWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        # Add sync option if Google Drive is configured
-        from tracking.local_settings import get_local_settings
-        settings = get_local_settings()
-        if settings.get('database_type') == 'google_drive':
-            sync_action = QAction('Sync with Google Drive...', self)
+        # Add sync option if using leader election sync
+        if self.db_manager.sync_strategy == 'leader_election':
+            sync_action = QAction('Manual Sync...', self)
             sync_action.triggered.connect(self.manual_sync)
             file_menu.addAction(sync_action)
             file_menu.addSeparator()

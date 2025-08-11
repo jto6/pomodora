@@ -21,6 +21,7 @@ class SyncConfiguration:
     
     def __init__(self):
         self.settings = get_local_settings()
+        debug_print(f"SyncConfiguration.__init__: loaded sync_strategy='{self.settings.get('sync_strategy')}'")
         self._migrate_legacy_settings()
     
     def _migrate_legacy_settings(self) -> None:
@@ -33,7 +34,7 @@ class SyncConfiguration:
             
             # If new settings already exist, no migration needed
             if sync_strategy and sync_strategy != 'local_only':
-                debug_print("New sync configuration already exists")
+                debug_print(f"New sync configuration already exists: sync_strategy='{sync_strategy}'")
                 return
             
             # Migrate legacy settings
@@ -93,7 +94,9 @@ class SyncConfiguration:
     
     def get_sync_strategy(self) -> str:
         """Get the sync strategy: 'local_only' or 'leader_election'"""
-        return self.settings.get('sync_strategy', 'local_only')
+        strategy = self.settings.get('sync_strategy', 'local_only')
+        debug_print(f"SyncConfiguration.get_sync_strategy() returning: '{strategy}'")
+        return strategy
     
     def get_coordination_backend_config(self) -> Dict[str, Any]:
         """Get coordination backend configuration"""
@@ -179,24 +182,29 @@ class SyncConfiguration:
         Returns (db_path, needs_coordination)
         """
         strategy = self.get_sync_strategy()
+        debug_print(f"get_database_path_for_strategy: strategy='{strategy}'")
         
         if strategy == 'local_only':
             # Legacy local database path
             config_dir = Path.home() / '.config' / 'pomodora'
             default_local = str(config_dir / 'database' / 'pomodora.db')
             db_path = self.settings.get('database_local_path', default_local)
+            debug_print(f"local_only strategy: db_path={db_path}, needs_coordination=False")
             return db_path, False
             
         elif strategy == 'leader_election':
             # Use local cache database
             cache_path = self.get_local_cache_db_path()
+            debug_print(f"leader_election strategy: cache_path={cache_path}, needs_coordination=True")
             return cache_path, True
             
         else:
             error_print(f"Unknown sync strategy: {strategy}")
             # Fallback to local
             config_dir = Path.home() / '.config' / 'pomodora'
-            return str(config_dir / 'database' / 'pomodora.db'), False
+            fallback_path = str(config_dir / 'database' / 'pomodora.db')
+            debug_print(f"fallback strategy: fallback_path={fallback_path}, needs_coordination=False")
+            return fallback_path, False
     
     def set_sync_strategy(self, strategy: str) -> None:
         """Set sync strategy"""
