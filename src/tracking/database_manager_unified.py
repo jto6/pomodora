@@ -157,12 +157,12 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
                 project_count = session.query(Project).count()
                 category_count = session.query(TaskCategory).count()
                 
-                if project_count == 0 or category_count == 0:
-                    info_print("Initializing default projects and categories")
+                if project_count == 0 and category_count == 0:
+                    info_print("Initializing default projects and categories for empty database")
                     self.initialize_default_projects()
                     self.backup_manager.create_backup_if_needed('daily')
                 else:
-                    debug_print(f"Database has {project_count} projects and {category_count} categories")
+                    debug_print(f"Database has {project_count} projects and {category_count} categories - skipping defaults")
                     
             finally:
                 session.close()
@@ -229,42 +229,6 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             session.rollback()
             error_print(f"Failed to initialize default data: {e}")
             raise
-        finally:
-            session.close()
-    
-    def add_sprint(self, project_id: int, task_category_id: int, task_description: str, 
-                   start_time: datetime, planned_duration: int) -> Optional[Sprint]:
-        """Add a new sprint and track operation for sync"""
-        session = self.get_session()
-        try:
-            sprint = Sprint(
-                project_id=project_id,
-                task_category_id=task_category_id,
-                task_description=task_description,
-                start_time=start_time,
-                planned_duration=planned_duration
-            )
-            
-            session.add(sprint)
-            session.commit()
-            session.refresh(sprint)
-            
-            # Track operation for sync
-            self.operation_tracker.track_operation('insert', 'sprints', {
-                'project_id': project_id,
-                'task_category_id': task_category_id,
-                'task_description': task_description,
-                'start_time': start_time.isoformat(),
-                'planned_duration': planned_duration
-            })
-            
-            debug_print(f"Added sprint: {task_description}")
-            return sprint
-            
-        except Exception as e:
-            session.rollback()
-            error_print(f"Failed to add sprint: {e}")
-            return None
         finally:
             session.close()
     
@@ -378,6 +342,44 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
     
     # GUI compatibility methods - delegate to session-based operations
     
+    def get_all_task_categories(self):
+        """Get all task categories (active and inactive)"""
+        session = self.get_session()
+        try:
+            task_categories_query = session.query(TaskCategory).all()
+            # Convert to dictionaries to avoid session detachment issues
+            task_categories = []
+            for task_category in task_categories_query:
+                task_categories.append({
+                    'id': task_category.id,
+                    'name': task_category.name,
+                    'color': task_category.color,
+                    'active': task_category.active,
+                    'created_at': task_category.created_at
+                })
+            return task_categories
+        finally:
+            session.close()
+    
+    def get_all_projects(self):
+        """Get all projects (active and inactive)"""
+        session = self.get_session()
+        try:
+            projects_query = session.query(Project).all()
+            # Convert to dictionaries to avoid session detachment issues
+            projects = []
+            for project in projects_query:
+                projects.append({
+                    'id': project.id,
+                    'name': project.name,
+                    'color': project.color,
+                    'active': project.active,
+                    'created_at': project.created_at
+                })
+            return projects
+        finally:
+            session.close()
+    
     def get_active_task_categories(self):
         """Get only active task categories"""
         session = self.get_session()
@@ -478,26 +480,209 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         
         return self.trigger_manual_sync()
     
-    def add_sprint(self, sprint):
-        """Add a sprint (legacy interface compatibility)"""
-        if hasattr(sprint, 'project_id'):
-            # New-style sprint object
-            return super().add_sprint(
+    def add_sprint(self, sprint_or_project_id, task_category_id=None, task_description=None, 
+                   start_time=None, planned_duration=None):
+        """Add a sprint - supports both Sprint objects and individual parameters"""
+        if isinstance(sprint_or_project_id, Sprint) or hasattr(sprint_or_project_id, 'project_id'):
+            # Sprint object passed
+            sprint = sprint_or_project_id
+            return self._add_sprint_from_params(
                 sprint.project_id,
                 sprint.task_category_id,
                 sprint.task_description,
                 sprint.start_time,
                 sprint.planned_duration
             )
-        else:
-            # Legacy sprint dict or object
-            return super().add_sprint(
-                sprint['project_id'] if isinstance(sprint, dict) else sprint.project_id,
-                sprint['task_category_id'] if isinstance(sprint, dict) else sprint.task_category_id,
-                sprint['task_description'] if isinstance(sprint, dict) else sprint.task_description,
-                sprint['start_time'] if isinstance(sprint, dict) else sprint.start_time,
-                sprint['planned_duration'] if isinstance(sprint, dict) else sprint.planned_duration
+        elif isinstance(sprint_or_project_id, dict):
+            # Dictionary passed
+            return self._add_sprint_from_params(
+                sprint_or_project_id['project_id'],
+                sprint_or_project_id['task_category_id'],
+                sprint_or_project_id['task_description'],
+                sprint_or_project_id['start_time'],
+                sprint_or_project_id['planned_duration']
             )
+        else:
+            # Individual parameters passed
+            return self._add_sprint_from_params(
+                sprint_or_project_id,  # project_id
+                task_category_id,
+                task_description,
+                start_time,
+                planned_duration
+            )
+    
+    def _add_sprint_from_params(self, project_id: int, task_category_id: int, task_description: str, 
+                               start_time: datetime, planned_duration: int) -> Optional[Sprint]:
+        """Internal method to add sprint from individual parameters"""
+        session = self.get_session()
+        try:
+            sprint = Sprint(
+                project_id=project_id,
+                task_category_id=task_category_id,
+                task_description=task_description,
+                start_time=start_time,
+                planned_duration=planned_duration
+            )
+            
+            session.add(sprint)
+            session.commit()
+            session.refresh(sprint)
+            
+            # Track operation for sync
+            self.operation_tracker.track_operation('insert', 'sprints', {
+                'project_id': project_id,
+                'task_category_id': task_category_id,
+                'task_description': task_description,
+                'start_time': start_time.isoformat(),
+                'planned_duration': planned_duration
+            })
+            
+            debug_print(f"Added sprint: {task_description}")
+            return sprint
+            
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to add sprint: {e}")
+            return None
+        finally:
+            session.close()
+
+    def toggle_project_active(self, project_id):
+        """Toggle project active status"""
+        session = self.get_session()
+        try:
+            project = session.query(Project).filter(Project.id == project_id).first()
+            if project:
+                project.active = not project.active
+                session.commit()
+                debug_print(f"Toggled project {project.name} active status to: {project.active}")
+                return project.active
+            return None
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to toggle project active status: {e}")
+            return None
+        finally:
+            session.close()
+
+    def toggle_task_category_active(self, category_id):
+        """Toggle task category active status"""
+        session = self.get_session()
+        try:
+            category = session.query(TaskCategory).filter(TaskCategory.id == category_id).first()
+            if category:
+                category.active = not category.active
+                session.commit()
+                debug_print(f"Toggled category {category.name} active status to: {category.active}")
+                return category.active
+            return None
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to toggle category active status: {e}")
+            return None
+        finally:
+            session.close()
+
+    def delete_project(self, project_id):
+        """Delete a project if it has no associated sprints"""
+        session = self.get_session()
+        try:
+            project = session.query(Project).filter(Project.id == project_id).first()
+            if not project:
+                return False, "Project not found"
+
+            # Check for associated sprints
+            sprint_count = session.query(Sprint).filter(Sprint.project_id == project_id).count()
+            if sprint_count > 0:
+                return False, f"Cannot delete project '{project.name}' - it has {sprint_count} associated sprints"
+
+            project_name = project.name
+            session.delete(project)
+            session.commit()
+            debug_print(f"Deleted project: {project_name}")
+            return True, f"Project '{project_name}' deleted successfully"
+            
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to delete project: {e}")
+            return False, f"Failed to delete project: {e}"
+        finally:
+            session.close()
+
+    def delete_task_category(self, category_id):
+        """Delete a task category if it has no associated sprints"""
+        session = self.get_session()
+        try:
+            category = session.query(TaskCategory).filter(TaskCategory.id == category_id).first()
+            if not category:
+                return False, "Task category not found"
+
+            # Check for associated sprints
+            sprint_count = session.query(Sprint).filter(Sprint.task_category_id == category_id).count()
+            if sprint_count > 0:
+                return False, f"Cannot delete category '{category.name}' - it has {sprint_count} associated sprints"
+
+            category_name = category.name
+            session.delete(category)
+            session.commit()
+            debug_print(f"Deleted task category: {category_name}")
+            return True, f"Task category '{category_name}' deleted successfully"
+            
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to delete task category: {e}")
+            return False, f"Failed to delete task category: {e}"
+        finally:
+            session.close()
+
+    def create_task_category(self, name, color):
+        """Create a new task category"""
+        session = self.get_session()
+        try:
+            # Check if category already exists
+            existing = session.query(TaskCategory).filter(TaskCategory.name == name).first()
+            if existing:
+                return False, f"Task category '{name}' already exists"
+
+            category = TaskCategory(name=name, color=color, active=True)
+            session.add(category)
+            session.commit()
+            session.refresh(category)
+            
+            debug_print(f"Created task category: {name} with color {color}")
+            return True, f"Task category '{name}' created successfully"
+            
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to create task category: {e}")
+            return False, f"Failed to create task category: {e}"
+        finally:
+            session.close()
+
+    def create_project(self, name, color):
+        """Create a new project"""
+        session = self.get_session()
+        try:
+            # Check if project already exists
+            existing = session.query(Project).filter(Project.name == name).first()
+            if existing:
+                return False, f"Project '{name}' already exists"
+
+            project = Project(name=name, color=color, active=True)
+            session.add(project)
+            session.commit()
+            session.refresh(project)
+            
+            debug_print(f"Created project: {name} with color {color}")
+            return True, f"Project '{name}' created successfully"
+            
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to create project: {e}")
+            return False, f"Failed to create project: {e}"
+        finally:
+            session.close()
 
 
 # Backward compatibility alias
