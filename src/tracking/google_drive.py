@@ -554,6 +554,36 @@ class GoogleDriveSync:
             error_print(f"Failed to delete file '{filename}': {e}")
             return False
 
+    def download_file(self, file_id: str, local_path: str) -> bool:
+        """Download a file by ID from Google Drive"""
+        try:
+            if not self.service:
+                error_print("Google Drive service not initialized")
+                return False
+
+            # Download file content
+            request = self.service.files().get_media(fileId=file_id)
+            file_io = io.BytesIO()
+            downloader = MediaIoBaseDownload(file_io, request)
+
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+
+            # Write to local file
+            local_file_path = Path(local_path)
+            local_file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(local_path, 'wb') as f:
+                f.write(file_io.getvalue())
+
+            debug_print(f"Downloaded file {file_id} to {local_path}")
+            return True
+
+        except Exception as e:
+            error_print(f"Failed to download file {file_id}: {e}")
+            return False
+
     def copy_file(self, file_id: str, new_name: str) -> bool:
         """Copy a file to a new name"""
         try:

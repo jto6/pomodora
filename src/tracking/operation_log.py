@@ -74,6 +74,27 @@ class OperationTracker:
             error_print(f"Failed to get pending operations: {e}")
             return []
 
+    def track_operation(self, operation_type: str, table_name: str, data: dict):
+        """Generic operation tracking method for compatibility"""
+        try:
+            # Extract record ID if present
+            record_id = data.get('id', 0)  # Default ID for new records
+            
+            if operation_type.lower() == 'insert':
+                self.log_insert(table_name, record_id, data)
+            elif operation_type.lower() == 'update':
+                self.log_update(table_name, record_id, {}, data)  # No old_data available
+            elif operation_type.lower() == 'delete':
+                self.log_delete(table_name, record_id, data)
+            else:
+                error_print(f"Unknown operation type: {operation_type}")
+        except Exception as e:
+            error_print(f"Failed to track operation {operation_type} on {table_name}: {e}")
+
+    def get_pending_operations(self):
+        """Alias for get_unsynced_operations() for compatibility"""
+        return self.get_unsynced_operations()
+
     def mark_operations_synced(self, operation_ids: list):
         """Mark operations as synced (remove from memory)"""
         try:
@@ -84,6 +105,15 @@ class OperationTracker:
             info_print(f"Cleared {synced_count} synced operations from memory")
         except Exception as e:
             error_print(f"Failed to clear synced operations: {e}")
+
+    def clear_operations(self):
+        """Clear all pending operations (after successful sync)"""
+        try:
+            count = len(self.pending_operations)
+            self.pending_operations.clear()
+            debug_print(f"Cleared {count} pending operations")
+        except Exception as e:
+            error_print(f"Failed to clear operations: {e}")
 
     def cleanup_old_operations(self, days_to_keep: int = 30):
         """No-op: in-memory operations are automatically cleaned up when synced"""
