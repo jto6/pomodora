@@ -196,7 +196,7 @@ class ActivityClassificationsDialog(QDialog):
 
         try:
             project = self.selected_project
-            new_status = self.db_manager.toggle_project_active(project.id)
+            new_status = self.db_manager.toggle_project_active(project['id'])
 
             if new_status is not None:
                 self.refresh_project_list()  # Refresh the activity classifications display
@@ -227,7 +227,7 @@ class ActivityClassificationsDialog(QDialog):
             )
 
             if reply == QMessageBox.StandardButton.Yes:
-                success, message = self.db_manager.delete_project(project.id)
+                success, message = self.db_manager.delete_project(project['id'])
 
                 if success:
                     self.refresh_project_list()  # Refresh the activity classifications display
