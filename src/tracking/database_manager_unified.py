@@ -164,7 +164,7 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
                 if project_count == 0 and category_count == 0:
                     info_print("Initializing default projects and categories for empty database")
                     self.initialize_default_projects()
-                    self.backup_manager.create_backup_if_needed('daily')
+                    self.backup_manager.create_backup('daily')
                 else:
                     debug_print(f"Database has {project_count} projects and {category_count} categories - skipping defaults")
                     
@@ -556,8 +556,18 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         try:
             project = session.query(Project).filter(Project.id == project_id).first()
             if project:
+                old_active = project.active
                 project.active = not project.active
                 session.commit()
+                
+                # Track operation for sync
+                self.operation_tracker.track_operation('update', 'projects', {
+                    'id': project_id,
+                    'active': project.active,
+                    'name': project.name,
+                    'color': project.color
+                })
+                
                 debug_print(f"Toggled project {project.name} active status to: {project.active}")
                 return project.active
             return None
@@ -574,8 +584,18 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         try:
             category = session.query(TaskCategory).filter(TaskCategory.id == category_id).first()
             if category:
+                old_active = category.active
                 category.active = not category.active
                 session.commit()
+                
+                # Track operation for sync
+                self.operation_tracker.track_operation('update', 'task_categories', {
+                    'id': category_id,
+                    'active': category.active,
+                    'name': category.name,
+                    'color': category.color
+                })
+                
                 debug_print(f"Toggled category {category.name} active status to: {category.active}")
                 return category.active
             return None
@@ -600,8 +620,18 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
                 return False, f"Cannot delete project '{project.name}' - it has {sprint_count} associated sprints"
 
             project_name = project.name
+            project_data = {
+                'id': project_id,
+                'name': project.name,
+                'color': project.color,
+                'active': project.active
+            }
             session.delete(project)
             session.commit()
+            
+            # Track operation for sync
+            self.operation_tracker.track_operation('delete', 'projects', project_data)
+            
             debug_print(f"Deleted project: {project_name}")
             return True, f"Project '{project_name}' deleted successfully"
             
@@ -626,8 +656,18 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
                 return False, f"Cannot delete category '{category.name}' - it has {sprint_count} associated sprints"
 
             category_name = category.name
+            category_data = {
+                'id': category_id,
+                'name': category.name,
+                'color': category.color,
+                'active': category.active
+            }
             session.delete(category)
             session.commit()
+            
+            # Track operation for sync
+            self.operation_tracker.track_operation('delete', 'task_categories', category_data)
+            
             debug_print(f"Deleted task category: {category_name}")
             return True, f"Task category '{category_name}' deleted successfully"
             
@@ -652,6 +692,14 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             session.commit()
             session.refresh(category)
             
+            # Track operation for sync
+            self.operation_tracker.track_operation('insert', 'task_categories', {
+                'id': category.id,
+                'name': name,
+                'color': color,
+                'active': True
+            })
+            
             debug_print(f"Created task category: {name} with color {color}")
             return True, f"Task category '{name}' created successfully"
             
@@ -675,6 +723,14 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             session.add(project)
             session.commit()
             session.refresh(project)
+            
+            # Track operation for sync
+            self.operation_tracker.track_operation('insert', 'projects', {
+                'id': project.id,
+                'name': name,
+                'color': color,
+                'active': True
+            })
             
             debug_print(f"Created project: {name} with color {color}")
             return True, f"Project '{name}' created successfully"
