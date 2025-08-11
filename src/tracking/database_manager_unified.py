@@ -188,16 +188,14 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         """Initialize default projects and categories"""
         session = self.get_session()
         try:
-            # Default task categories
+            # Default task categories - only for completely empty databases
             default_categories = [
-                {"name": "Development", "color": "#3498db"},
-                {"name": "Testing", "color": "#2ecc71"},
-                {"name": "Documentation", "color": "#f39c12"},
-                {"name": "Planning", "color": "#9b59b6"},
-                {"name": "Meeting", "color": "#e74c3c"},
-                {"name": "Learning", "color": "#1abc9c"},
-                {"name": "Bug Fix", "color": "#e67e22"},
-                {"name": "Review", "color": "#34495e"}
+                {"name": "Admin", "color": "#3498db"},
+                {"name": "Comm", "color": "#2ecc71"},
+                {"name": "Strategy", "color": "#f39c12"},
+                {"name": "Research", "color": "#9b59b6"},
+                {"name": "SelfDev", "color": "#e74c3c"},
+                {"name": "Dev", "color": "#1abc9c"}
             ]
             
             for cat_data in default_categories:

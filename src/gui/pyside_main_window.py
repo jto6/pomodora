@@ -63,8 +63,8 @@ class ModernPomodoroWindow(QMainWindow):
             cache_path = str(cache_dir / 'pomodora.db')
             self.db_manager = DatabaseManager(cache_path)
         info_print("Database initialized")
-        self.db_manager.initialize_default_projects()  # Ensure default projects exist
-        info_print("Default projects initialized")
+        # Default projects/categories are initialized automatically by DatabaseManager if database is empty
+        info_print("Default projects and categories checked")
 
         # Debug: Check existing sprints on startup
         try:
@@ -785,12 +785,8 @@ class ModernPomodoroWindow(QMainWindow):
 
                 # Handle case where no projects exist
                 if not projects:
-                    debug_print("No projects found - default projects should have been created during initialization")
-                    # Re-initialize defaults if somehow missing
-                    self.db_manager.initialize_default_projects()
-                    # Reload projects after initialization
-                    projects = self.db_manager.get_active_projects()
-                    task_categories = self.db_manager.get_active_task_categories()
+                    error_print("No projects found - database may be corrupted or misconfigured")
+                    projects = []
                     category_names = {tc['name'] for tc in task_categories}
                     
                     # Re-separate and sort
@@ -860,11 +856,8 @@ class ModernPomodoroWindow(QMainWindow):
                     self.task_category_combo.addItem(display_name, task_category['id'])
 
                 if not task_categories:
-                    debug_print("No task categories found - default task categories should have been created during initialization")
-                    # Re-initialize defaults if somehow missing
-                    self.db_manager.initialize_default_projects()  # This creates both task categories and projects
-                    # Reload task categories after initialization
-                    task_categories = self.db_manager.get_active_task_categories()
+                    error_print("No task categories found - database may be corrupted or misconfigured")
+                    task_categories = []
                     # Sort task categories alphabetically by name
                     task_categories = sorted(task_categories, key=lambda tc: tc['name'].lower())
                     for task_category in task_categories:
