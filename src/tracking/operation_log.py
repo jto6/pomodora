@@ -6,6 +6,7 @@ Tracks all local database changes to enable proper multi-workstation synchroniza
 import json
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 try:
@@ -183,6 +184,57 @@ class DatabaseMerger:
         except Exception as e:
             error_print(f"Failed to merge databases: {e}")
             return False
+
+    def merge_operations(self, target_db_path: str, operations: list) -> Optional[str]:
+        """
+        Apply operations to target database and return path to modified database.
+        This method is used by LeaderElectionSyncManager for database sync.
+        
+        Args:
+            target_db_path: Path to database to apply operations to
+            operations: List of operations to apply
+            
+        Returns:
+            Path to modified database (same as input if successful), None if failed
+        """
+        try:
+            if not operations:
+                debug_print("No operations to apply - returning original database path")
+                return target_db_path
+                
+            info_print(f"Applying {len(operations)} operations to database: {target_db_path}")
+            
+            # Apply operations to the target database
+            target_engine = create_engine(f'sqlite:///{target_db_path}')
+            TargetSession = sessionmaker(bind=target_engine)
+            target_session = TargetSession()
+            
+            try:
+                applied_count = 0
+                for op in operations:
+                    if self._apply_operation_to_remote(target_session, op):
+                        applied_count += 1
+                    else:
+                        error_print(f"Failed to apply operation {op['id']}, stopping merge")
+                        target_session.rollback()
+                        return None
+                
+                # Commit all changes
+                target_session.commit()
+                info_print(f"Successfully applied {applied_count} operations to target database")
+                
+                return target_db_path
+                
+            except Exception as e:
+                target_session.rollback()
+                error_print(f"Error applying operations to target database: {e}")
+                return None
+            finally:
+                target_session.close()
+                
+        except Exception as e:
+            error_print(f"Failed to merge operations into target database: {e}")
+            return None
 
     def _apply_operation_to_remote(self, remote_session, operation: dict) -> bool:
         """Apply a single operation to the remote database"""
