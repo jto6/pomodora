@@ -40,20 +40,30 @@ class SyncConfiguration:
             migrated = False
             
             if database_type == 'google_drive' or google_drive_enabled:
-                # Legacy Google Drive configuration
-                info_print("Migrating legacy Google Drive configuration")
-                self.settings.set('sync_strategy', 'leader_election')
+                # Check if Google Drive credentials actually exist before migrating
+                credentials_path = self.settings.get('google_credentials_path', 'credentials.json')
                 
-                coordination_config = self.settings.get('coordination_backend', {})
-                coordination_config['type'] = 'google_drive'
-                
-                google_config = coordination_config.get('google_drive', {})
-                google_config['credentials_path'] = self.settings.get('google_credentials_path', 'credentials.json')
-                google_config['folder_name'] = self.settings.get('google_drive_folder', 'TimeTracking')
-                
-                coordination_config['google_drive'] = google_config
-                self.settings.set('coordination_backend', coordination_config)
-                migrated = True
+                if Path(credentials_path).exists():
+                    # Legacy Google Drive configuration with valid credentials
+                    info_print("Migrating legacy Google Drive configuration")
+                    self.settings.set('sync_strategy', 'leader_election')
+                    
+                    coordination_config = self.settings.get('coordination_backend', {})
+                    coordination_config['type'] = 'google_drive'
+                    
+                    google_config = coordination_config.get('google_drive', {})
+                    google_config['credentials_path'] = credentials_path
+                    google_config['folder_name'] = self.settings.get('google_drive_folder', 'TimeTracking')
+                    
+                    coordination_config['google_drive'] = google_config
+                    self.settings.set('coordination_backend', coordination_config)
+                    migrated = True
+                else:
+                    # Legacy Google Drive config but no credentials - disable it
+                    info_print("Legacy Google Drive configuration found but no credentials - disabling")
+                    self.settings.set('sync_strategy', 'local_only')
+                    self.settings.set('google_drive_enabled', False)
+                    migrated = True
                 
             elif database_type == 'local':
                 # Legacy local database - check if it should be shared
