@@ -1,0 +1,12 @@
+# Testing framework dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-xdist>=3.0.0
+pytest-mock>=3.10.0
+pytest-html>=3.1.0
+pytest-benchmark>=4.0.0
+
+# Additional testing utilities
+freezegun>=1.2.0  # Time mocking for timer tests
+responses>=0.23.0  # HTTP request mocking for Google Drive tests
+factory-boy>=3.2.0  # Test data generation
