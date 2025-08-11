@@ -119,15 +119,18 @@ class LeaderElectionSyncManager:
                 
                 # Step 4: Merge local changes with downloaded database
                 self._report_progress("Merging local changes", 0.5)
+                
+                # Get pending operations before merging
+                pending_operations = self.operation_tracker.get_pending_operations()
                 merged_db_path = self._merge_databases(temp_db_path)
                 
                 if not merged_db_path:
                     error_print("Failed to merge databases")
                     return False
                 
-                # Step 5: Upload merged database only if there were local changes
-                if merged_db_path != temp_db_path:
-                    # Database was actually merged with local changes - upload required
+                # Step 5: Upload merged database if there were local changes
+                if pending_operations:
+                    # Database was merged with local changes - upload required
                     self._report_progress("Uploading merged database", 0.7)
                     if not self.coordination.upload_database(merged_db_path):
                         error_print("Failed to upload merged database")
@@ -191,8 +194,8 @@ class LeaderElectionSyncManager:
             pending_operations = self.operation_tracker.get_pending_operations()
             
             if not pending_operations:
-                debug_print("No pending local changes - using downloaded database")
-                return downloaded_db_path
+                debug_print("No pending local changes - keeping local database")
+                return str(self.local_cache_db)
             
             # Create DatabaseMerger on-demand for this sync operation
             from .operation_log import DatabaseMerger

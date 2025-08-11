@@ -4,8 +4,10 @@ Tracks all local database changes to enable proper multi-workstation synchroniza
 """
 
 import json
+import os
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -23,13 +25,56 @@ class OperationType(Enum):
     DELETE = "DELETE"
 
 class OperationTracker:
-    """Tracks and manages database operations for merge synchronization using in-memory storage"""
+    """Tracks and manages database operations for merge synchronization with persistent storage"""
 
     def __init__(self, db_path: str):
         self.db_path = db_path
-        # Use in-memory list instead of database table
-        self.pending_operations = []
-        debug_print("In-memory operation tracker initialized")
+        # Create persistent storage file path alongside database
+        db_file = Path(db_path)
+        self.operations_file = db_file.parent / f"{db_file.stem}_operations.json"
+        
+        # Load existing operations from file
+        self.pending_operations = self._load_operations()
+        debug_print(f"Operation tracker initialized with {len(self.pending_operations)} pending operations from {self.operations_file}")
+
+    def _load_operations(self) -> list:
+        """Load pending operations from persistent storage"""
+        try:
+            if self.operations_file.exists():
+                with open(self.operations_file, 'r') as f:
+                    operations = json.load(f)
+                    # Convert timestamp strings back to datetime objects
+                    for op in operations:
+                        if 'timestamp' in op and isinstance(op['timestamp'], str):
+                            op['timestamp'] = datetime.fromisoformat(op['timestamp'])
+                    debug_print(f"Loaded {len(operations)} operations from {self.operations_file}")
+                    return operations
+            else:
+                debug_print(f"No operations file found at {self.operations_file}")
+                return []
+        except Exception as e:
+            error_print(f"Failed to load operations from {self.operations_file}: {e}")
+            return []
+
+    def _save_operations(self):
+        """Save pending operations to persistent storage"""
+        try:
+            # Ensure directory exists
+            self.operations_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Convert operations for JSON serialization
+            serializable_ops = []
+            for op in self.pending_operations:
+                serializable_op = op.copy()
+                if 'timestamp' in serializable_op and isinstance(serializable_op['timestamp'], datetime):
+                    serializable_op['timestamp'] = serializable_op['timestamp'].isoformat()
+                serializable_ops.append(serializable_op)
+            
+            with open(self.operations_file, 'w') as f:
+                json.dump(serializable_ops, f, indent=2)
+            debug_print(f"Saved {len(serializable_ops)} operations to {self.operations_file}")
+        except Exception as e:
+            error_print(f"Failed to save operations to {self.operations_file}: {e}")
 
     def log_insert(self, table_name: str, record_id: int, record_data: dict):
         """Log an INSERT operation"""
@@ -59,7 +104,8 @@ class OperationTracker:
             }
 
             self.pending_operations.append(operation)
-            debug_print(f"Logged {op_type.value} on {table_name}[{record_id}] (in-memory)")
+            self._save_operations()  # Persist to file immediately
+            debug_print(f"Logged {op_type.value} on {table_name}[{record_id}] (persisted)")
 
         except Exception as e:
             error_print(f"Failed to log operation {op_type.value} on {table_name}[{record_id}]: {e}")
@@ -103,7 +149,11 @@ class OperationTracker:
             initial_count = len(self.pending_operations)
             self.pending_operations = [op for op in self.pending_operations if op['id'] not in operation_ids]
             synced_count = initial_count - len(self.pending_operations)
-            info_print(f"Cleared {synced_count} synced operations from memory")
+            
+            # Save updated operations list
+            self._save_operations()
+            
+            info_print(f"Cleared {synced_count} synced operations from persistent storage")
         except Exception as e:
             error_print(f"Failed to clear synced operations: {e}")
 
@@ -112,6 +162,12 @@ class OperationTracker:
         try:
             count = len(self.pending_operations)
             self.pending_operations.clear()
+            
+            # Delete the persistent operations file
+            if self.operations_file.exists():
+                self.operations_file.unlink()
+                debug_print(f"Deleted operations file: {self.operations_file}")
+            
             debug_print(f"Cleared {count} pending operations")
         except Exception as e:
             error_print(f"Failed to clear operations: {e}")

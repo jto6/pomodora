@@ -136,6 +136,13 @@ class GoogleDriveSync:
             ).execute()
 
             files = results.get('files', [])
+            
+            # If multiple files exist, warn and pick the most recently modified one
+            if len(files) > 1:
+                error_print(f"Warning: Found {len(files)} database files named '{db_filename}' in Google Drive")
+                error_print("Using the most recently modified file. Consider removing duplicates.")
+                # Sort by modifiedTime descending to get the most recent first
+                files.sort(key=lambda f: f['modifiedTime'], reverse=True)
 
             # Prepare file metadata and media
             file_metadata = {
@@ -146,7 +153,7 @@ class GoogleDriveSync:
             media = MediaFileUpload(local_db_path, resumable=True)
 
             if files:
-                # Update existing file
+                # Update existing file (most recently modified if there are duplicates)
                 self.db_file_id = files[0]['id']
                 updated_file = self.service.files().update(
                     fileId=self.db_file_id,
@@ -189,6 +196,13 @@ class GoogleDriveSync:
             if not files:
                 error_print(f"Database file not found in Google Drive: {db_filename}")
                 return False
+
+            # If multiple files exist, warn and pick the most recently modified one
+            if len(files) > 1:
+                error_print(f"Warning: Found {len(files)} database files named '{db_filename}' in Google Drive")
+                error_print("Using the most recently modified file. Consider removing duplicates.")
+                # Sort by modifiedTime descending to get the most recent first
+                files.sort(key=lambda f: f['modifiedTime'], reverse=True)
 
             self.db_file_id = files[0]['id']
 
