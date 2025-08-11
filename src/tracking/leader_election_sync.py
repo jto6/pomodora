@@ -25,7 +25,7 @@ class LeaderElectionSyncManager:
         self.coordination = coordination_backend
         self.local_cache_db = Path(local_cache_db_path)
         self.operation_tracker = OperationTracker(str(self.local_cache_db))
-        self.database_merger = DatabaseMerger()
+        # DatabaseMerger created on-demand during sync operations
         
         # Callbacks for progress reporting
         self.progress_callback: Optional[Callable[[str, float], None]] = None
@@ -187,8 +187,16 @@ class LeaderElectionSyncManager:
                 debug_print("No pending local changes - using downloaded database")
                 return downloaded_db_path
             
+            # Create DatabaseMerger on-demand for this sync operation
+            from .operation_log import DatabaseMerger
+            database_merger = DatabaseMerger(
+                str(self.local_cache_db),  # local_db_path
+                downloaded_db_path,       # remote_db_path (downloaded temp file)
+                self.operation_tracker    # Use existing tracker
+            )
+            
             # Apply local operations to downloaded database
-            merged_db_path = self.database_merger.merge_operations(
+            merged_db_path = database_merger.merge_operations(
                 downloaded_db_path, 
                 pending_operations
             )
