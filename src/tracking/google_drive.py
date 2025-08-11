@@ -136,6 +136,7 @@ class GoogleDriveSync:
             ).execute()
 
             files = results.get('files', [])
+            debug_print(f"Found {len(files)} database files named '{db_filename}' in Google Drive")
             
             # If multiple files exist, warn and pick the most recently modified one
             if len(files) > 1:
@@ -143,6 +144,7 @@ class GoogleDriveSync:
                 error_print("Using the most recently modified file. Consider removing duplicates.")
                 # Sort by modifiedTime descending to get the most recent first
                 files.sort(key=lambda f: f['modifiedTime'], reverse=True)
+                debug_print(f"Selected most recent file: ID={files[0]['id']}, modified={files[0]['modifiedTime']}")
 
             # Prepare file metadata and media
             file_metadata = {
@@ -155,21 +157,37 @@ class GoogleDriveSync:
             if files:
                 # Update existing file (most recently modified if there are duplicates)
                 self.db_file_id = files[0]['id']
-                updated_file = self.service.files().update(
-                    fileId=self.db_file_id,
-                    media_body=media,
-                    fields='id, modifiedTime'
-                ).execute()
-                info_print(f"Updated database in Google Drive")
+                debug_print(f"Attempting to update existing file with ID: {self.db_file_id}")
+                
+                try:
+                    updated_file = self.service.files().update(
+                        fileId=self.db_file_id,
+                        media_body=media,
+                        fields='id, modifiedTime'
+                    ).execute()
+                    info_print(f"Updated existing database in Google Drive (ID: {self.db_file_id})")
+                except Exception as e:
+                    error_print(f"Failed to update existing file {self.db_file_id}: {e}")
+                    error_print("Creating new file as fallback")
+                    
+                    # Fallback: create new file
+                    uploaded_file = self.service.files().create(
+                        body=file_metadata,
+                        media_body=media,
+                        fields='id, modifiedTime'
+                    ).execute()
+                    self.db_file_id = uploaded_file.get('id')
+                    error_print(f"Created new database file as fallback (ID: {self.db_file_id})")
             else:
                 # Create new file
+                debug_print("No existing database files found, creating new file")
                 uploaded_file = self.service.files().create(
                     body=file_metadata,
                     media_body=media,
                     fields='id, modifiedTime'
                 ).execute()
                 self.db_file_id = uploaded_file.get('id')
-                info_print(f"Uploaded new database to Google Drive")
+                info_print(f"Created new database in Google Drive (ID: {self.db_file_id})")
 
             return True
 
