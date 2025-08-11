@@ -1515,3 +1515,10 @@ class DatabaseManager(ProgressCapableMixin):
             return filtered_sprints
         finally:
             session.close()
+
+
+# Import unified database manager for backward compatibility
+from .database_manager_unified import UnifiedDatabaseManager
+
+# Backward compatibility - expose as DatabaseManager
+DatabaseManager = UnifiedDatabaseManager

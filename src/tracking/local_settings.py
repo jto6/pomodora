@@ -37,11 +37,25 @@ class LocalSettingsManager:
             'window_position': None, # {'x': int, 'y': int}
             'window_size': None,     # {'width': int, 'height': int}
             'compact_mode': False,   # boolean (runtime state, not persistent)
-            'database_type': 'local', # 'local' or 'google_drive'
-            'database_local_path': str(config_dir / 'database'),  # local database directory
-            'google_drive_enabled': False,  # enable Google Drive sync
-            'google_credentials_path': 'credentials.json',  # path to Google Drive credentials
-            'google_drive_folder': 'TimeTracking',  # folder name in Google Drive
+            # Database and sync configuration
+            'sync_strategy': 'local_only',  # 'local_only', 'leader_election'
+            'coordination_backend': {
+                'type': 'local_file',  # 'local_file', 'google_drive'  
+                'local_file': {
+                    'shared_db_path': str(config_dir / 'database' / 'pomodora.db')
+                },
+                'google_drive': {
+                    'credentials_path': 'credentials.json',
+                    'folder_name': 'TimeTracking'
+                }
+            },
+            'local_cache_db_path': str(config_dir / 'cache' / 'pomodora.db'),
+            
+            # Legacy settings (for backward compatibility)
+            'database_type': 'local',  # deprecated - use sync_strategy
+            'google_drive_enabled': False,  # deprecated - use sync_strategy
+            'google_credentials_path': 'credentials.json',  # deprecated
+            'google_drive_folder': 'TimeTracking'  # deprecated
         }
 
         self._settings = self._load_settings()

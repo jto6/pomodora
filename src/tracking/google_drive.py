@@ -493,6 +493,105 @@ class GoogleDriveSync:
         except Exception as e:
             error_print(f"Failed to fix auto-increment sequences: {e}")
 
+    def list_files_by_pattern(self, pattern: str) -> list:
+        """List files matching a pattern in the configured folder"""
+        try:
+            if not self.service or not self.folder_id:
+                return []
+            
+            # Convert simple pattern to Google Drive query
+            # For now, handle basic patterns like "sync_intent_*.json"
+            if '*' in pattern:
+                base_pattern = pattern.replace('*', '')
+                query = f"parents in '{self.folder_id}' and trashed=false and name contains '{base_pattern}'"
+            else:
+                query = f"parents in '{self.folder_id}' and trashed=false and name='{pattern}'"
+            
+            results = self.service.files().list(
+                q=query,
+                fields="files(id, name, createdTime, modifiedTime, size)"
+            ).execute()
+            
+            return results.get('files', [])
+            
+        except Exception as e:
+            error_print(f"Failed to list files by pattern '{pattern}': {e}")
+            return []
+
+    def list_files_by_name(self, filename: str) -> list:
+        """List files with exact name match in the configured folder"""
+        try:
+            if not self.service or not self.folder_id:
+                return []
+            
+            query = f"name='{filename}' and parents in '{self.folder_id}' and trashed=false"
+            results = self.service.files().list(
+                q=query,
+                fields="files(id, name, createdTime, modifiedTime, size)"
+            ).execute()
+            
+            return results.get('files', [])
+            
+        except Exception as e:
+            error_print(f"Failed to list files by name '{filename}': {e}")
+            return []
+
+    def delete_file_by_name(self, filename: str) -> bool:
+        """Delete file by name from the configured folder"""
+        try:
+            files = self.list_files_by_name(filename)
+            if not files:
+                debug_print(f"File not found for deletion: {filename}")
+                return True  # Not an error if file doesn't exist
+            
+            for file in files:
+                self.service.files().delete(fileId=file['id']).execute()
+                debug_print(f"Deleted file: {filename}")
+            
+            return True
+            
+        except Exception as e:
+            error_print(f"Failed to delete file '{filename}': {e}")
+            return False
+
+    def copy_file(self, file_id: str, new_name: str) -> bool:
+        """Copy a file to a new name"""
+        try:
+            if not self.service or not self.folder_id:
+                return False
+            
+            body = {
+                'name': new_name,
+                'parents': [self.folder_id]
+            }
+            
+            self.service.files().copy(fileId=file_id, body=body).execute()
+            debug_print(f"Copied file to: {new_name}")
+            return True
+            
+        except Exception as e:
+            error_print(f"Failed to copy file to '{new_name}': {e}")
+            return False
+
+    def rename_file(self, file_id: str, new_name: str) -> bool:
+        """Rename a file"""
+        try:
+            if not self.service:
+                return False
+            
+            body = {'name': new_name}
+            self.service.files().update(fileId=file_id, body=body).execute()
+            debug_print(f"Renamed file to: {new_name}")
+            return True
+            
+        except Exception as e:
+            error_print(f"Failed to rename file to '{new_name}': {e}")
+            return False
+
+    def ensure_folder_exists(self, folder_name: str) -> bool:
+        """Ensure folder exists and set folder_id"""
+        return self.setup_drive_folder(folder_name)
+
 class GoogleDriveManager:
     """High-level manager for Google Drive database synchronization"""
 
