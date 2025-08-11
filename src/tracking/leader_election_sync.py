@@ -125,11 +125,18 @@ class LeaderElectionSyncManager:
                     error_print("Failed to merge databases")
                     return False
                 
-                # Step 5: Upload merged database
-                self._report_progress("Uploading merged database", 0.7)
-                if not self.coordination.upload_database(merged_db_path):
-                    error_print("Failed to upload merged database")
-                    return False
+                # Step 5: Upload merged database only if there were local changes
+                if merged_db_path != temp_db_path:
+                    # Database was actually merged with local changes - upload required
+                    self._report_progress("Uploading merged database", 0.7)
+                    if not self.coordination.upload_database(merged_db_path):
+                        error_print("Failed to upload merged database")
+                        return False
+                    debug_print("Uploaded merged database with local changes")
+                else:
+                    # No local changes were applied - skip upload
+                    debug_print("No local changes applied - skipping database upload")
+                    self._report_progress("No upload needed", 0.7)
                 
                 # Step 6: Update local cache with merged database
                 self._report_progress("Updating local cache", 0.8)
