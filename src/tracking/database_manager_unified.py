@@ -375,6 +375,129 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         if not self.sync_manager:
             return 0
         return self.sync_manager.get_pending_operations_count()
+    
+    # GUI compatibility methods - delegate to session-based operations
+    
+    def get_active_task_categories(self):
+        """Get only active task categories"""
+        session = self.get_session()
+        try:
+            task_categories_query = session.query(TaskCategory).filter(TaskCategory.active == True).all()
+            # Convert to dictionaries to avoid session detachment issues
+            task_categories = []
+            for task_category in task_categories_query:
+                task_categories.append({
+                    'id': task_category.id,
+                    'name': task_category.name,
+                    'color': task_category.color,
+                    'active': task_category.active,
+                    'created_at': task_category.created_at
+                })
+            return task_categories
+        finally:
+            session.close()
+    
+    def get_active_projects(self):
+        """Get only active projects"""
+        session = self.get_session()
+        try:
+            projects_query = session.query(Project).filter(Project.active == True).all()
+            # Convert to dictionaries to avoid session detachment issues
+            projects = []
+            for project in projects_query:
+                projects.append({
+                    'id': project.id,
+                    'name': project.name,
+                    'color': project.color,
+                    'active': project.active,
+                    'created_at': project.created_at
+                })
+            return projects
+        finally:
+            session.close()
+    
+    def get_project_by_id(self, project_id):
+        """Get project by ID"""
+        session = self.get_session()
+        try:
+            return session.query(Project).filter(Project.id == project_id).first()
+        finally:
+            session.close()
+    
+    def get_sprints_by_date(self, date):
+        """Get sprints for a specific date"""
+        session = self.get_session()
+        try:
+            from datetime import datetime, timedelta
+            start_of_day = datetime.combine(date, datetime.min.time())
+            end_of_day = start_of_day + timedelta(days=1)
+
+            debug_print(f"Stats update: Looking for sprints between {start_of_day} and {end_of_day}")
+
+            # Filter by date
+            filtered_sprints = session.query(Sprint).filter(
+                Sprint.start_time >= start_of_day,
+                Sprint.start_time < end_of_day
+            ).all()
+
+            debug_print(f"Found {len(filtered_sprints)} sprints for {date}")
+            return filtered_sprints
+        finally:
+            session.close()
+    
+    def has_pending_changes(self):
+        """Check if there are local changes that need to be synced"""
+        if not self.sync_manager:
+            return False
+        return self.sync_manager.is_sync_needed()
+    
+    def sync_if_changes_pending(self):
+        """Sync only if there are pending local changes"""
+        if not self.sync_manager:
+            debug_print("No sync manager - skipping sync")
+            return True
+            
+        if not self.has_pending_changes():
+            debug_print("No pending changes - skipping sync")
+            return True
+            
+        debug_print("Pending changes found - starting sync...")
+        return self.sync_manager.sync_database()
+    
+    def sync_with_progress(self, parent_widget=None) -> bool:
+        """
+        Perform database sync with progress dialog (for user-initiated syncs).
+        """
+        if not self.sync_manager:
+            debug_print("No sync manager - manual sync not available")
+            return True
+            
+        # Set up progress callback if we have a parent widget
+        if parent_widget and hasattr(parent_widget, 'show_progress'):
+            self.sync_manager.set_progress_callback(parent_widget.show_progress)
+        
+        return self.trigger_manual_sync()
+    
+    def add_sprint(self, sprint):
+        """Add a sprint (legacy interface compatibility)"""
+        if hasattr(sprint, 'project_id'):
+            # New-style sprint object
+            return super().add_sprint(
+                sprint.project_id,
+                sprint.task_category_id,
+                sprint.task_description,
+                sprint.start_time,
+                sprint.planned_duration
+            )
+        else:
+            # Legacy sprint dict or object
+            return super().add_sprint(
+                sprint['project_id'] if isinstance(sprint, dict) else sprint.project_id,
+                sprint['task_category_id'] if isinstance(sprint, dict) else sprint.task_category_id,
+                sprint['task_description'] if isinstance(sprint, dict) else sprint.task_description,
+                sprint['start_time'] if isinstance(sprint, dict) else sprint.start_time,
+                sprint['planned_duration'] if isinstance(sprint, dict) else sprint.planned_duration
+            )
 
 
 # Backward compatibility alias
