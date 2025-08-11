@@ -98,7 +98,6 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
     
     def _initialize_database_engine(self) -> None:
         """Initialize SQLite database engine with optimal settings"""
-        # Use WAL mode for better concurrency
         connect_args = {
             'check_same_thread': False,  # Allow multi-threading
         }
@@ -112,10 +111,17 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         # Create tables
         Base.metadata.create_all(self.engine)
         
-        # Configure SQLite for better concurrency
+        # Configure SQLite settings based on sync strategy
         with self.engine.connect() as conn:
-            # Enable WAL mode for better concurrency
-            conn.execute(text("PRAGMA journal_mode=WAL"))
+            if self.sync_strategy == 'leader_election':
+                # Leader election ensures single writer - use DELETE journal mode
+                conn.execute(text("PRAGMA journal_mode=DELETE"))
+                debug_print("Database engine initialized with DELETE journal mode (leader election)")
+            else:
+                # Local-only might have multiple threads - use WAL mode
+                conn.execute(text("PRAGMA journal_mode=WAL"))
+                debug_print("Database engine initialized with WAL mode (local-only)")
+            
             # Set reasonable timeout for lock contention
             conn.execute(text("PRAGMA busy_timeout=30000"))  # 30 seconds
             # Enable foreign key constraints
@@ -125,8 +131,6 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         # Create session factory
         self.Session = sessionmaker(bind=self.engine)
         self.session = None
-        
-        debug_print("Database engine initialized with WAL mode")
     
     def _initialize_backup_manager(self) -> None:
         """Initialize backup manager based on sync strategy"""

@@ -144,14 +144,26 @@ class SyncConfiguration:
                 folder_name = google_config.get('folder_name', 'TimeTracking')
                 
                 debug_print(f"Creating GoogleDriveBackend: folder={folder_name}, credentials={credentials_path}")
-                backend = GoogleDriveBackend(credentials_path, folder_name)
                 
-                # Check if it's available
-                if not backend.is_available():
-                    error_print(f"GoogleDriveBackend not available - credentials or connectivity issue")
+                # Check if credentials file exists first
+                if not Path(credentials_path).exists():
+                    error_print(f"Google Drive credentials file not found: {credentials_path}")
                     return None
                 
-                return backend
+                try:
+                    backend = GoogleDriveBackend(credentials_path, folder_name)
+                    
+                    # Check if it's available
+                    if not backend.is_available():
+                        error_print(f"GoogleDriveBackend not available - credentials or connectivity issue")
+                        return None
+                    
+                    info_print(f"GoogleDriveBackend created successfully: {folder_name}")
+                    return backend
+                    
+                except Exception as e:
+                    error_print(f"Failed to create GoogleDriveBackend: {e}")
+                    return None
                 
             else:
                 error_print(f"Unknown coordination backend type: {backend_type}")
