@@ -178,6 +178,16 @@ class GoogleDriveBackend(CoordinationBackend):
                 if not self.drive_sync.copy_file(existing_files[0]['id'], backup_filename):
                     debug_print("Warning: Could not create backup of existing database")
             
+            # Clean up any existing files with the final name (to avoid duplicates)
+            existing_final_files = self.drive_sync.list_files_by_name(final_filename)
+            if len(existing_final_files) > 1:
+                debug_print(f"Found {len(existing_final_files)} existing files named '{final_filename}', cleaning up duplicates")
+                # Keep only the most recent one, delete the rest
+                existing_final_files.sort(key=lambda f: f.get('modifiedTime', ''), reverse=True)
+                for file_to_delete in existing_final_files[1:]:  # Delete all but the first (most recent)
+                    debug_print(f"Deleting duplicate file: {file_to_delete['id']}")
+                    self.drive_sync.service.files().delete(fileId=file_to_delete['id']).execute()
+            
             # Rename temporary file to final name (atomic operation)
             temp_files = self.drive_sync.list_files_by_name(temp_filename)
             if temp_files:
