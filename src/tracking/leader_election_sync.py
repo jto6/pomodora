@@ -194,8 +194,8 @@ class LeaderElectionSyncManager:
             pending_operations = self.operation_tracker.get_pending_operations()
             
             if not pending_operations:
-                debug_print("No pending local changes - keeping local database")
-                return str(self.local_cache_db)
+                debug_print("No pending local changes - using downloaded database")
+                return downloaded_db_path
             
             # Create DatabaseMerger on-demand for this sync operation
             from .operation_log import DatabaseMerger
