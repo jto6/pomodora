@@ -7,7 +7,8 @@ This guide explains when and how to run the different test suites in the Pomodor
 | Test Type | Command | Duration | When to Run | Status |
 |-----------|---------|----------|-------------|--------|
 | Timer Unit Tests | `python -m pytest tests/unit/timer/ -v` | ~0.1s | During timer development | ✅ Working |
-| Working Unit Tests | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v` | ~0.5s | Before commits | ✅ Working |
+| **Pre-Commit Suite** | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint tests/unit/tracking/test_sync_merge_logic.py tests/unit/tracking/test_backup_logic.py -k "not test_local_changes_trigger_merge" -v` | ~0.5s | **Before commits** | ✅ Working |
+| Basic Unit Tests | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v` | ~0.4s | Quick validation | ✅ Working |
 | Integration Tests | `python -m pytest tests/integration/ -v` | ~2-5s | Before releases | ⚠️ Has issues |
 | All Unit Tests | `python -m pytest tests/ -m unit -v` | ~5s | Weekly validation | ⚠️ Some issues |
 | **Unified Concurrency Tests** | `python -m pytest tests/concurrency/test_unified_sync.py -v -s` | ~15-30s | Before major releases | ✅ Working |
@@ -34,6 +35,12 @@ This guide explains when and how to run the different test suites in the Pomodor
 - **Coverage**: Critical bug prevention for Google Drive sync and backup issues
 - **Command**: `python -m pytest tests/unit/tracking/test_sync_merge_logic.py tests/unit/tracking/test_backup_logic.py -v`
 - **Duration**: ~0.3 seconds
+
+**Pre-Commit Suite (RECOMMENDED)** - Combined timer + database + regression tests
+- **Status**: Working ✅ (42/43 tests passing)
+- **Coverage**: Complete core functionality validation + critical bug prevention
+- **Command**: See Pre-Commit Suite in Quick Reference table
+- **Duration**: ~0.5 seconds
 
 ### ⚠️ Tier 2: Integration Tests (Issues)
 
@@ -111,6 +118,24 @@ python -m pytest tests/concurrency/test_unified_sync.py -k "robustness" -v -s
 python -m pytest tests/concurrency/test_unified_sync.py -k "edge_cases" -v -s
 ```
 
+## Command Aliases
+
+For convenience, you can create these shell aliases:
+
+```bash
+# Add to your ~/.bashrc or ~/.zshrc
+alias test-timer="python -m pytest tests/unit/timer/ -v"
+alias test-precommit="python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint tests/unit/tracking/test_sync_merge_logic.py tests/unit/tracking/test_backup_logic.py -k 'not test_local_changes_trigger_merge' -v"
+alias test-regression="python -m pytest tests/unit/tracking/test_sync_merge_logic.py tests/unit/tracking/test_backup_logic.py -v"
+```
+
+Then simply run:
+```bash
+test-precommit  # Before commits (recommended)
+test-timer      # During timer development  
+test-regression # To verify bug fixes
+```
+
 ## Development Workflow
 
 ### During Active Development
@@ -150,10 +175,10 @@ python -m pytest tests/unit/timer/ -v
 python -m py_compile src/main.py
 ```
 
-**Enhanced Pre-Commit (if time permits):**
+**Enhanced Pre-Commit (recommended):**
 ```bash
-# Include working database tests
-python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v
+# Comprehensive test suite with regression protection
+python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint tests/unit/tracking/test_sync_merge_logic.py tests/unit/tracking/test_backup_logic.py -k "not test_local_changes_trigger_merge" -v
 ```
 
 ### Weekly/Release Validation
