@@ -9,7 +9,7 @@ This guide explains when and how to run the different test suites in the Pomodor
 | Timer Unit Tests | `python -m pytest tests/unit/timer/ -v` | ~0.1s | During timer development | ✅ Working |
 | **Pre-Commit Suite** | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint tests/unit/tracking/test_sync_merge_logic.py tests/unit/tracking/test_backup_logic.py -k "not test_local_changes_trigger_merge" -v` | ~0.5s | **Before commits** | ✅ Working |
 | Basic Unit Tests | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v` | ~0.4s | Quick validation | ✅ Working |
-| **ALL TESTS** | `python -m pytest tests/ -v` | ~6s | Complete validation | ✅ 200/203 pass |
+| **ALL TESTS** | `python -m pytest tests/ -v` | ~6s | Complete validation | ✅ 202/203 pass |
 | Integration Tests | `python -m pytest tests/integration/ -v` | ~2-5s | Before releases | ⚠️ Has issues |
 | All Unit Tests | `python -m pytest tests/ -m unit -v` | ~5s | Weekly validation | ⚠️ Some issues |
 | **Unified Concurrency Tests** | `python -m pytest tests/concurrency/test_unified_sync.py -v -s` | ~15-30s | Before major releases | ✅ All 9 tests pass |

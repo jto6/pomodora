@@ -27,7 +27,8 @@ class TestLocalSettingsManager:
         assert settings.get('sprint_alarm') == 'gentle_chime'
         assert settings.get('break_alarm') == 'urgent_alert'
         assert settings.get('auto_compact_mode') is True
-        assert settings.get('database_type') == 'local'
+        # database_type removed - now using sync_strategy and coordination_backend
+        assert settings.get('sync_strategy') == 'local_only'
     
     def test_config_file_creation(self, temp_settings):
         """Test that config file is created when saving"""

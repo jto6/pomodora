@@ -116,9 +116,9 @@ class TestSyncMergeLogic:
         ]
         sync_manager.operation_tracker.get_pending_operations.return_value = pending_ops
         
-        # Mock the DatabaseMerger
+        # Mock the DatabaseMerger (imported on-demand inside the method)
         from unittest.mock import patch
-        with patch('tracking.leader_election_sync.DatabaseMerger') as mock_merger_class:
+        with patch('tracking.operation_log.DatabaseMerger') as mock_merger_class:
             mock_merger = Mock()
             merged_path = str(temp_dir / "merged_result.db")
             mock_merger.merge_operations.return_value = merged_path
