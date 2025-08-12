@@ -1547,6 +1547,11 @@ class ModernPomodoroWindow(QMainWindow):
 
     def refresh_ui_state(self):
         """Refresh UI elements to match current timer state"""
+        # Safety check - timer might be None during shutdown
+        if not self.pomodoro_timer:
+            debug_print("Timer is None - skipping UI refresh during shutdown")
+            return
+            
         timer_state = self.pomodoro_timer.get_state()
 
         if timer_state == TimerState.STOPPED:

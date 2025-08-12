@@ -170,13 +170,7 @@ class GoogleDriveBackend(CoordinationBackend):
                 error_print("Failed to upload database to Google Drive")
                 return False
             
-            # Create backup of existing database
-            existing_files = self.drive_sync.list_files_by_name(final_filename)
-            if existing_files:
-                backup_filename = f"pomodora_backup_{timestamp}.db"
-                # Copy existing file to backup name
-                if not self.drive_sync.copy_file(existing_files[0]['id'], backup_filename):
-                    debug_print("Warning: Could not create backup of existing database")
+            # Note: Database backups are handled locally, not in Google Drive
             
             # Clean up any existing files with the final name (to avoid duplicates)
             existing_final_files = self.drive_sync.list_files_by_name(final_filename)
@@ -280,14 +274,11 @@ class GoogleDriveBackend(CoordinationBackend):
                     self.drive_sync.delete_file_by_name(leader_file['name'])
                     debug_print(f"Cleaned up stale leader file: {leader_file['name']}")
             
-            # Clean up old backup files (keep last 10)
+            # Clean up any backup files (they shouldn't exist in Google Drive)
             backup_files = self.drive_sync.list_files_by_pattern("pomodora_backup_*.db")
-            if len(backup_files) > 10:
-                # Sort by creation time and keep newest 10
-                backup_files.sort(key=lambda f: f['createdTime'])
-                for old_backup in backup_files[:-10]:
-                    self.drive_sync.delete_file_by_name(old_backup['name'])
-                    debug_print(f"Cleaned up old backup: {old_backup['name']}")
+            for backup_file in backup_files:
+                self.drive_sync.delete_file_by_name(backup_file['name'])
+                debug_print(f"Removed inappropriate backup file from Google Drive: {backup_file['name']}")
             
             # Clean up temporary sync files
             temp_files = self.drive_sync.list_files_by_pattern("pomodora_sync_*.db")

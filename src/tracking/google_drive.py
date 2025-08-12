@@ -159,6 +159,17 @@ class GoogleDriveSync:
                 self.db_file_id = files[0]['id']
                 debug_print(f"Attempting to update existing file with ID: {self.db_file_id}")
                 
+                # Clean up duplicate files before updating
+                if len(files) > 1:
+                    debug_print(f"Cleaning up {len(files) - 1} duplicate database files")
+                    for duplicate_file in files[1:]:
+                        try:
+                            self.service.files().delete(fileId=duplicate_file['id']).execute()
+                            debug_print(f"Deleted duplicate file: {duplicate_file['id']}")
+                        except Exception as e:
+                            error_print(f"Failed to delete duplicate file {duplicate_file['id']}: {e}")
+                
+                # Update the remaining file
                 try:
                     updated_file = self.service.files().update(
                         fileId=self.db_file_id,
@@ -168,16 +179,7 @@ class GoogleDriveSync:
                     info_print(f"Updated existing database in Google Drive (ID: {self.db_file_id})")
                 except Exception as e:
                     error_print(f"Failed to update existing file {self.db_file_id}: {e}")
-                    error_print("Creating new file as fallback")
-                    
-                    # Fallback: create new file
-                    uploaded_file = self.service.files().create(
-                        body=file_metadata,
-                        media_body=media,
-                        fields='id, modifiedTime'
-                    ).execute()
-                    self.db_file_id = uploaded_file.get('id')
-                    error_print(f"Created new database file as fallback (ID: {self.db_file_id})")
+                    return False  # Don't create duplicates, fail instead
             else:
                 # Create new file
                 debug_print("No existing database files found, creating new file")

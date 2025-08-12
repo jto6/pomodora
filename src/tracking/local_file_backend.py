@@ -25,6 +25,27 @@ class LocalFileBackend(CoordinationBackend):
     def __init__(self, shared_db_path: str):
         super().__init__()
         self.shared_db_path = Path(shared_db_path).resolve()
+        
+        # Ensure parent directory exists for shared database
+        parent_dir = self.shared_db_path.parent
+        debug_print(f"Creating parent directory: {parent_dir}")
+        
+        try:
+            # Check if path exists and what type it is
+            if parent_dir.exists():
+                if parent_dir.is_file():
+                    raise FileExistsError(f"Cannot create directory '{parent_dir}' - a file with that name already exists")
+                elif parent_dir.is_dir():
+                    debug_print(f"Parent directory already exists: {parent_dir}")
+                else:
+                    debug_print(f"Path exists but is neither file nor directory: {parent_dir}")
+            else:
+                parent_dir.mkdir(parents=True, exist_ok=True)
+                debug_print(f"Created parent directory: {parent_dir}")
+        except Exception as e:
+            error_print(f"Failed to create parent directory {parent_dir}: {e}")
+            raise
+        
         self.coordination_dir = self.shared_db_path.parent / ".pomodora_sync"
         self.coordination_dir.mkdir(exist_ok=True)
         

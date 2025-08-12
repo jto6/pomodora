@@ -135,13 +135,27 @@ class DatabaseBackupManager:
         # Create yearly backup if it doesn't exist for current year
         return not yearly_backup_path.exists()
 
+    def should_create_daily_backup(self) -> bool:
+        """Check if we should create a daily backup (only once per day)"""
+        today = date.today()
+        today_str = today.strftime('%Y%m%d')
+        
+        # Check if any daily backup exists for today
+        daily_backups = list(self.daily_dir.glob(f"pomodora_daily_{today_str}_*.db"))
+        
+        # Create daily backup if none exists for today
+        return len(daily_backups) == 0
+
     def perform_scheduled_backups(self):
         """Perform all scheduled backups based on current date"""
         try:
-            # Always create daily backup
-            daily_backup = self.create_backup("daily")
-            if daily_backup:
-                debug_print(f"Daily backup created: {daily_backup.name}")
+            # Create daily backup if needed (only once per day)
+            if self.should_create_daily_backup():
+                daily_backup = self.create_backup("daily")
+                if daily_backup:
+                    info_print(f"Daily backup created: {daily_backup.name}")
+            else:
+                debug_print("Daily backup already exists for today, skipping")
 
             # Create monthly backup if needed
             if self.should_create_monthly_backup():
