@@ -59,13 +59,15 @@ class TestSettingsPersistence:
             # Create settings and modify only some values
             settings1 = LocalSettingsManager()
             settings1.config_file = config_file
+            # Reset to clean defaults first
+            settings1._settings = settings1.defaults.copy()
             
             # Only change a few settings
             settings1.set('sprint_duration', 45)
             settings1.set('sprint_alarm', 'triple_bell')
             settings1.save()
             
-            # New session
+            # New session - create with isolated config
             settings2 = LocalSettingsManager()
             settings2.config_file = config_file
             settings2._settings = settings2._load_settings()
@@ -74,8 +76,9 @@ class TestSettingsPersistence:
             assert settings2.get('sprint_duration') == 45
             assert settings2.get('sprint_alarm') == 'triple_bell'
             
-            # Unmodified settings should have defaults
-            assert settings2.get('theme_mode') == 'light'  # Default
+            # Unmodified settings should have defaults from the defaults dict
+            expected_theme = settings2.defaults['theme_mode']  # Get from actual defaults
+            assert settings2.get('theme_mode') == expected_theme
             assert settings2.get('break_duration') == 5  # Default
             assert settings2.get('alarm_volume') == 0.7  # Default
     

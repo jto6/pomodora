@@ -107,6 +107,10 @@ class LocalSettingsManager:
         self._settings = self.defaults.copy()
         self._save_settings()
 
+    def save(self):
+        """Save current settings to file (public interface)"""
+        self._save_settings()
+
     def get_config_path(self) -> str:
         """Get the path to the config file"""
         return str(self.config_file)

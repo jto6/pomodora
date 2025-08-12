@@ -233,7 +233,7 @@ class TestGoogleDriveSyncLogic:
         sync_manager.operation_tracker = mock_tracker
         
         # Mock database merger
-        with patch('tracking.leader_election_sync.DatabaseMerger') as mock_merger_class:
+        with patch('tracking.operation_log.DatabaseMerger') as mock_merger_class:
             mock_merger = Mock()
             mock_merger.merge_operations.return_value = str(temp_dir / "merged.db")
             mock_merger_class.return_value = mock_merger

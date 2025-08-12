@@ -122,9 +122,14 @@ class DatabaseTestUtils:
     @staticmethod
     def create_test_project(db_manager: DatabaseManager, name: str = "Test Project", 
                            color: str = "#ff0000") -> Project:
-        """Create a test project"""
+        """Create a test project or return existing one with same name"""
         session = db_manager.get_session()
         try:
+            # Check if project already exists
+            existing_project = session.query(Project).filter(Project.name == name).first()
+            if existing_project:
+                return existing_project
+                
             project = Project(name=name, color=color)
             session.add(project)
             session.commit()
@@ -136,9 +141,14 @@ class DatabaseTestUtils:
     @staticmethod
     def create_test_category(db_manager: DatabaseManager, name: str = "Test Category",
                             color: str = "#00ff00") -> TaskCategory:
-        """Create a test task category"""
+        """Create a test task category or return existing one with same name"""
         session = db_manager.get_session()
         try:
+            # Check if category already exists
+            existing_category = session.query(TaskCategory).filter(TaskCategory.name == name).first()
+            if existing_category:
+                return existing_category
+                
             category = TaskCategory(name=name, color=color)
             session.add(category)
             session.commit()
