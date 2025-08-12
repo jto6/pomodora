@@ -51,11 +51,6 @@ class LocalSettingsManager:
             },
             'local_cache_db_path': str(config_dir / 'cache' / 'pomodora.db'),
             
-            # Legacy settings (for backward compatibility)
-            'database_type': 'local',  # deprecated - use sync_strategy
-            'google_drive_enabled': False,  # deprecated - use sync_strategy
-            'google_credentials_path': 'credentials.json',  # deprecated
-            'google_drive_folder': 'TimeTracking'  # deprecated
         }
 
         self._settings = self._load_settings()

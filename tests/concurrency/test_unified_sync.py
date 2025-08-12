@@ -76,7 +76,7 @@ class TestUnifiedSyncConcurrency:
             simulator.create_concurrent_sprints(count_per_instance=3)
             
             # Simulate shutdown sync operations
-            sync_results = simulator.simulate_sync_triggers()
+            sync_results = simulator.simulate_sync_triggers(sync_types=['shutdown', 'shutdown'])
             
             # Verify shutdown sync executed
             assert len(sync_results['shutdown_sync']) > 0

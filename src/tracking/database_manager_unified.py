@@ -95,8 +95,6 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         # Perform initial sync if using leader election
         if self.sync_manager:
             self._perform_initial_sync()
-            # Ensure tables exist after sync (sync might replace database with empty one)
-            self._ensure_tables_exist()
     
     def _initialize_database_engine(self) -> None:
         """Initialize SQLite database engine with optimal settings"""
@@ -185,15 +183,6 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             self.sync_manager.sync_database(timeout_seconds=120)
         except Exception as e:
             error_print(f"Initial sync failed: {e}")
-    
-    def _ensure_tables_exist(self) -> None:
-        """Ensure database tables exist, creating them if necessary"""
-        try:
-            # Create tables if they don't exist
-            Base.metadata.create_all(self.engine)
-            debug_print("Ensured database tables exist")
-        except Exception as e:
-            error_print(f"Failed to ensure tables exist: {e}")
     
     def get_session(self):
         """Get a database session"""
@@ -335,10 +324,10 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         
         return status
     
-    def cleanup_stale_coordination_files(self) -> None:
+    def cleanup_stale_coordination_files(self, max_age_hours: int = 1) -> None:
         """Clean up stale coordination files"""
         if self.sync_manager:
-            self.sync_manager.cleanup_stale_coordination_files()
+            self.sync_manager.cleanup_stale_coordination_files(max_age_hours)
     
     def is_sync_needed(self) -> bool:
         """Check if sync is needed"""

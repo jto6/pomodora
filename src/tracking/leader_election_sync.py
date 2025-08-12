@@ -12,7 +12,9 @@ from datetime import datetime
 
 from .coordination_backend import CoordinationBackend, CoordinationError, LeaderElectionTimeout
 from .operation_log import OperationTracker, DatabaseMerger
+from .models import Base
 from utils.logging import debug_print, error_print, info_print, trace_print
+from sqlalchemy import create_engine, text
 
 
 class LeaderElectionSyncManager:
@@ -59,6 +61,115 @@ class LeaderElectionSyncManager:
         if self.status_callback:
             self.status_callback(message)
         info_print(f"Sync status: {message}")
+    
+    def _ensure_database_schema(self, db_path: str) -> bool:
+        """
+        Ensure database has proper schema (tables) and default data before using it.
+        
+        Args:
+            db_path: Path to database file to validate/fix
+            
+        Returns:
+            True if schema and default data exist or were successfully created, False on error
+        """
+        try:
+            if not os.path.exists(db_path):
+                debug_print(f"Database file does not exist: {db_path}")
+                return False
+            
+            # Check if database has tables
+            engine = create_engine(f'sqlite:///{db_path}', echo=False)
+            
+            try:
+                with engine.connect() as conn:
+                    # Check if core tables exist
+                    result = conn.execute(text(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('projects', 'task_categories', 'sprints')"
+                    ))
+                    existing_tables = [row[0] for row in result.fetchall()]
+                    
+                    schema_complete = len(existing_tables) == 3
+                    
+                    if not schema_complete:
+                        # Schema missing or incomplete - create it
+                        info_print(f"Creating missing database schema in: {db_path}")
+                        Base.metadata.create_all(engine)
+                        
+                        # Verify schema was created
+                        result = conn.execute(text(
+                            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('projects', 'task_categories', 'sprints')"
+                        ))
+                        created_tables = [row[0] for row in result.fetchall()]
+                        
+                        if len(created_tables) != 3:
+                            error_print(f"Failed to create complete schema in: {db_path}")
+                            return False
+                        
+                        info_print(f"Successfully created database schema in: {db_path}")
+                    
+                    # Check if default data exists
+                    result = conn.execute(text("SELECT COUNT(*) FROM projects"))
+                    project_count = result.fetchone()[0]
+                    
+                    result = conn.execute(text("SELECT COUNT(*) FROM task_categories"))
+                    category_count = result.fetchone()[0]
+                    
+                    if project_count == 0 or category_count == 0:
+                        info_print(f"Creating default data in database: {db_path}")
+                        # Create default data directly to avoid circular imports
+                        from sqlalchemy.orm import sessionmaker
+                        from .models import Project, TaskCategory
+                        
+                        Session = sessionmaker(bind=engine)
+                        session = Session()
+                        
+                        try:
+                            # Default task categories
+                            default_categories = [
+                                {"name": "Admin", "color": "#3498db"},
+                                {"name": "Comm", "color": "#2ecc71"},
+                                {"name": "Strategy", "color": "#f39c12"},
+                                {"name": "Research", "color": "#9b59b6"},
+                                {"name": "SelfDev", "color": "#e74c3c"},
+                                {"name": "Dev", "color": "#1abc9c"}
+                            ]
+                            
+                            for cat_data in default_categories:
+                                existing = session.query(TaskCategory).filter(TaskCategory.name == cat_data["name"]).first()
+                                if not existing:
+                                    category = TaskCategory(name=cat_data["name"], color=cat_data["color"])
+                                    session.add(category)
+                            
+                            # Default projects - only "None" as default
+                            default_projects = [
+                                {"name": "None", "color": "#3498db"}
+                            ]
+                            
+                            for proj_data in default_projects:
+                                existing = session.query(Project).filter(Project.name == proj_data["name"]).first()
+                                if not existing:
+                                    project = Project(name=proj_data["name"], color=proj_data["color"])
+                                    session.add(project)
+                            
+                            session.commit()
+                            info_print(f"Successfully created default data in: {db_path}")
+                            
+                        except Exception as e:
+                            session.rollback()
+                            error_print(f"Failed to create default data: {e}")
+                            return False
+                        finally:
+                            session.close()
+                    
+                    debug_print(f"Database schema and data validated: {db_path}")
+                    return True
+                        
+            finally:
+                engine.dispose()
+                
+        except Exception as e:
+            error_print(f"Failed to validate/create database schema for {db_path}: {e}")
+            return False
     
     def sync_database(self, force: bool = False, timeout_seconds: int = 60) -> bool:
         """
@@ -117,6 +228,11 @@ class LeaderElectionSyncManager:
                     error_print("Failed to download database")
                     return False
                 
+                # Validate and ensure downloaded database has proper schema
+                if not self._ensure_database_schema(temp_db_path):
+                    error_print("Downloaded database lacks proper schema - cannot proceed")
+                    return False
+                
                 # Step 4: Merge local changes with downloaded database
                 self._report_progress("Merging local changes", 0.5)
                 
@@ -144,9 +260,15 @@ class LeaderElectionSyncManager:
                 # Step 6: Update local cache with merged database
                 self._report_progress("Updating local cache", 0.8)
                 if merged_db_path != str(self.local_cache_db):
+                    # Validate merged database has proper schema before replacing local
+                    if not self._ensure_database_schema(merged_db_path):
+                        error_print("Merged database lacks proper schema - cannot replace local database")
+                        return False
+                    
                     # Copy merged database to local cache
                     import shutil
                     shutil.copy2(merged_db_path, self.local_cache_db)
+                    info_print("Successfully updated local database with validated schema")
                 
                 # Step 7: Clear operation log (changes have been synced)
                 self.operation_tracker.clear_operations()

@@ -64,15 +64,46 @@ pomodora/
 │   │   └── alarm.py                # Audio alarm system (generated + file-based)
 │   └── tracking/
 │       ├── __init__.py
-│       ├── models.py               # SQLAlchemy database models
-│       ├── database_backup.py      # Database backup management system
-│       ├── operation_log.py        # In-memory operation tracking for database merging
-│       ├── local_settings.py      # Local configuration management
-│       └── google_drive.py         # Google Drive API integration
+│       ├── models.py                       # SQLAlchemy database models
+│       ├── database_manager_unified.py     # Main database interface (UnifiedDatabaseManager)
+│       ├── sync_config.py                  # Sync strategy and backend configuration
+│       ├── leader_election_sync.py         # Leader election sync manager
+│       ├── coordination_backend.py         # Abstract coordination interface
+│       ├── local_file_backend.py           # Local file coordination backend
+│       ├── google_drive_backend.py         # Google Drive coordination backend
+│       ├── operation_log.py                # Operation tracking for database merging
+│       ├── database_backup.py              # Database backup management system
+│       └── local_settings.py              # Local configuration management
 ├── requirements.txt                # Python dependencies
 ├── CLAUDE.md                      # Development documentation
 └── README.md                      # User documentation
 ```
+
+## Architecture
+
+The application uses a modern, configurable sync architecture with two strategies:
+
+### Local-Only Strategy (`sync_strategy: "local_only"`)
+- **Use Case**: Single workstation, no cloud sync needed
+- **Database**: Single SQLite file stored locally
+- **Coordination**: None required
+- **Backup**: Local backups only
+
+### Leader Election Strategy (`sync_strategy: "leader_election"`)
+- **Use Case**: Multi-workstation sync with conflict resolution
+- **Database**: Local cache synchronized with shared storage
+- **Coordination**: Distributed leader election prevents race conditions
+- **Backends Available**:
+  - **Local File Backend**: Shared database file for multi-process coordination
+  - **Google Drive Backend**: Cloud sync for multi-device coordination
+
+### Components
+
+- **UnifiedDatabaseManager**: Main database interface that handles both strategies
+- **SyncConfiguration**: Configuration management for sync strategy and backends
+- **LeaderElectionSyncManager**: Handles leader election and conflict resolution
+- **CoordinationBackend**: Abstract interface for different coordination mechanisms
+- **OperationTracker**: Tracks database changes for intelligent merging
 
 ## Key Features
 
@@ -118,14 +149,22 @@ The application supports multiple verbosity levels for debugging and troubleshoo
 ## Settings Configuration
 
 All settings stored in `~/.config/pomodora/settings.json`:
+
+### Application Settings
 - `theme_mode`: "light" or "dark"
 - `sprint_duration`, `break_duration`: Timer durations in minutes
 - `alarm_volume`: 0.0 to 1.0
 - `sprint_alarm`, `break_alarm`: Sound identifiers or file paths
 - `auto_compact_mode`: Auto-enter compact mode when sprint starts
-- `database_type`: "local" or "google_drive"
-- `google_credentials_path`: Path to Google Drive credentials file
-- `google_drive_folder`: Folder name in Google Drive for database storage
+
+### Sync Configuration
+- `sync_strategy`: "local_only" or "leader_election"
+- `coordination_backend`: Configuration for sync coordination
+  - `type`: "local_file" or "google_drive"
+  - `local_file.shared_db_path`: Path to shared database file
+  - `google_drive.credentials_path`: Path to Google Drive credentials file
+  - `google_drive.folder_name`: Folder name in Google Drive for database storage
+- `local_cache_db_path`: Path to local cache database (for leader_election strategy)
 
 ## Database Backup System
 
@@ -133,13 +172,15 @@ The application includes an automatic backup system that protects your data with
 
 ### Backup Structure
 
-**Local Database Mode:**
-- Database: `/your/configured/path/pomodora.db`
-- Backups: `/your/configured/path/Backup/`
+**Local-Only Strategy (`sync_strategy: "local_only"`):**
+- Database: `~/.config/pomodora/database/pomodora.db`
+- Backups: `~/.config/pomodora/database/Backup/`
 
-**Google Drive Mode:**
-- Database: `~/.config/pomodora/cache/pomodora.db` (synced from Google Drive)
-- Backups: `~/.config/pomodora/google_drive_backups/Backup/`
+**Leader Election Strategy (`sync_strategy: "leader_election"`):**
+- Database: `~/.config/pomodora/cache/pomodora.db` (local cache of synced database)
+- Backups: 
+  - Local File Backend: `~/.config/pomodora/cache/Backup/`
+  - Google Drive Backend: `~/.config/pomodora/google_drive_backups/Backup/`
 
 ### Backup Types and Retention
 

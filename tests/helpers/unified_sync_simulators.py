@@ -130,6 +130,14 @@ class UnifiedSyncSimulator:
         if not self.instances:
             self.create_app_instances()
         
+        # Initialize default data once before concurrent operations to avoid race conditions
+        if self.instances:
+            try:
+                self.instances[0].initialize_default_projects()
+            except Exception as e:
+                # Ignore errors if data already exists
+                pass
+        
         sprint_ids = {i: [] for i in range(self.num_instances)}
         threads = []
         
@@ -156,6 +164,8 @@ class UnifiedSyncSimulator:
                                 sprint_ids[instance_id].append(sprint.id)
                         
                         self.sync_events.append(f"Instance {instance_id} created {count_per_instance} sprints")
+                    else:
+                        self.errors.append(f"Instance {instance_id}: No project or category found")
                 finally:
                     session.close()
             except Exception as e:
@@ -176,7 +186,7 @@ class UnifiedSyncSimulator:
         
         return sprint_ids
     
-    def simulate_sync_triggers(self) -> Dict[str, Any]:
+    def simulate_sync_triggers(self, sync_types: Optional[List[str]] = None) -> Dict[str, Any]:
         """Test manual, timer, and shutdown sync using unified sync managers"""
         if not self.instances:
             self.create_app_instances()
@@ -231,16 +241,31 @@ class UnifiedSyncSimulator:
             except Exception as e:
                 self.errors.append(f"Shutdown sync error instance {instance_id}: {e}")
         
-        # Start different sync types concurrently
-        for i in range(min(3, self.num_instances)):
-            if i == 0:
-                thread = threading.Thread(target=manual_sync, args=(i,))
-            elif i == 1:
-                thread = threading.Thread(target=timer_sync, args=(i,))
-            else:
-                thread = threading.Thread(target=shutdown_sync, args=(i,))
-            threads.append(thread)
-            thread.start()
+        # Start sync types based on parameter or default behavior
+        if sync_types is None:
+            # Default behavior: run different sync types based on instance index
+            for i in range(min(3, self.num_instances)):
+                if i == 0:
+                    thread = threading.Thread(target=manual_sync, args=(i,))
+                elif i == 1:
+                    thread = threading.Thread(target=timer_sync, args=(i,))
+                else:
+                    thread = threading.Thread(target=shutdown_sync, args=(i,))
+                threads.append(thread)
+                thread.start()
+        else:
+            # Run specific sync types for available instances
+            sync_functions = {
+                'manual': manual_sync,
+                'timer': timer_sync, 
+                'shutdown': shutdown_sync
+            }
+            
+            for i, sync_type in enumerate(sync_types):
+                if i < self.num_instances and sync_type in sync_functions:
+                    thread = threading.Thread(target=sync_functions[sync_type], args=(i,))
+                    threads.append(thread)
+                    thread.start()
         
         # Wait for completion
         for thread in threads:

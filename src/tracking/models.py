@@ -106,7 +106,7 @@ class DatabaseManager(ProgressCapableMixin):
         except:
             debug_print("Could not count local sprints (table might not exist yet)")
 
-        self._initialize_google_drive_sync()  # Changed to synchronous
+        # Legacy Google Drive sync removed - now handled by UnifiedDatabaseManager
 
         # Check if we lost any local sprints and warn user
         try:
@@ -129,54 +129,49 @@ class DatabaseManager(ProgressCapableMixin):
 
 
     def _get_backup_storage_location(self) -> tuple[str, str]:
-        """Get the actual storage location for backups (not cache)
+        """Get the actual storage location for backups based on sync strategy
 
         Returns:
             Tuple of (db_path_for_backup, backup_base_directory)
         """
         try:
-            from .local_settings import get_local_settings
-            settings = get_local_settings()
-            db_type = settings.get('database_type', 'local')
-
-            if db_type == 'local':
-                # For local storage, use the configured local path
-                local_path = settings.get('database_local_path', '')
-                if local_path:
-                    from pathlib import Path
-                    local_path = Path(local_path)
-                    if local_path.is_dir():
-                        # If it's a directory, add the database filename
-                        db_path = str(local_path / 'pomodora.db')
-                        backup_base = str(local_path)
-                    else:
-                        # It's already a full path to the database file
-                        db_path = str(local_path)
-                        backup_base = str(local_path.parent)
-                else:
-                    # Use default local path
-                    from pathlib import Path
-                    config_dir = Path.home() / '.config' / 'pomodora'
-                    db_dir = config_dir / 'database'
-                    db_path = str(db_dir / 'pomodora.db')
-                    backup_base = str(db_dir)
-
-                info_print(f"Local backup location: {backup_base}/Backup/")
+            from .sync_config import SyncConfiguration
+            from pathlib import Path
+            
+            config = SyncConfiguration()
+            strategy = config.get_sync_strategy()
+            
+            if strategy == 'local_only':
+                # Local-only mode: backup the local database
+                db_path, _ = config.get_database_path_for_strategy()
+                backup_base = str(Path(db_path).parent)
+                info_print(f"Local-only backup location: {backup_base}/Backup/")
                 return db_path, backup_base
-            else:
-                # For Google Drive mode, backups go to a local directory
-                # but represent the Google Drive database
-                from pathlib import Path
+                
+            elif strategy == 'leader_election':
+                # Leader election mode: backup the local cache (synced database)
+                cache_db_path = config.get_local_cache_db_path()
+                
+                # Determine backup directory based on coordination backend
+                backend_config = config.get_coordination_backend_config()
+                backend_type = backend_config.get('type', 'local_file')
+                
                 config_dir = Path.home() / '.config' / 'pomodora'
-                backup_base = config_dir / 'google_drive_backups'
-                backup_base.mkdir(parents=True, exist_ok=True)
-
-                # Use the cache database for creating backups, but store them
-                # in the google_drive_backups directory
-                db_path = self.db_path  # The cache database
-
-                info_print(f"Google Drive backup location: {backup_base}/Backup/")
-                return str(db_path), str(backup_base)
+                
+                if backend_type == 'google_drive':
+                    backup_base = config_dir / 'google_drive_backups'
+                    backup_base.mkdir(parents=True, exist_ok=True)
+                    info_print(f"Google Drive sync backup location: {backup_base}/Backup/")
+                else:
+                    backup_base = Path(cache_db_path).parent
+                    info_print(f"Local file sync backup location: {backup_base}/Backup/")
+                
+                return str(self.db_path), str(backup_base)
+            
+            else:
+                error_print(f"Unknown sync strategy: {strategy}")
+                # Fallback to cache location
+                return self.db_path, str(Path(self.db_path).parent)
 
         except Exception as e:
             error_print(f"Error determining backup location, using cache: {e}")
