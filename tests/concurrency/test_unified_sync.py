@@ -145,7 +145,6 @@ class TestBackendSpecificFeatures:
         finally:
             simulator.cleanup()
     
-    @pytest.mark.skip("Mock Google Drive backend - enable when ready")
     def test_google_drive_coordination(self):
         """Test GoogleDrive backend coordination with mocks"""
         simulator = UnifiedSyncSimulator(backend_type="google_drive", num_instances=3)
