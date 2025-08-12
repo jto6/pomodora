@@ -11,8 +11,7 @@ This guide explains when and how to run the different test suites in the Pomodor
 | Basic Unit Tests | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v` | ~0.4s | Quick validation | ✅ Working |
 | Integration Tests | `python -m pytest tests/integration/ -v` | ~2-5s | Before releases | ⚠️ Has issues |
 | All Unit Tests | `python -m pytest tests/ -m unit -v` | ~5s | Weekly validation | ⚠️ Some issues |
-| **Unified Concurrency Tests** | `python -m pytest tests/concurrency/test_unified_sync.py -v -s` | ~15-30s | Before major releases | ✅ Working |
-| Legacy Concurrency Tests | `python -m pytest tests/concurrency/test_sync_triggers.py -v -s` | ~30s | Deprecated | ⚠️ Legacy |
+| **Unified Concurrency Tests** | `python -m pytest tests/concurrency/test_unified_sync.py -v -s` | ~15-30s | Before major releases | ✅ All 9 tests pass |
 
 ## Test Categories
 
@@ -56,17 +55,12 @@ This guide explains when and how to run the different test suites in the Pomodor
 ### ✅ Tier 4: Unified Concurrency Tests (Advanced)
 
 **Unified Leader Election Sync** - `tests/concurrency/test_unified_sync.py`
-- **Status**: Complete and working ✅
-- **Coverage**: Backend-agnostic sync testing (LocalFile + GoogleDrive coordination)
+- **Status**: Complete and working ✅ (All 9 tests pass)
+- **Coverage**: Backend-agnostic sync testing (LocalFile + GoogleDrive mocks)
 - **Command**: `python -m pytest tests/concurrency/test_unified_sync.py -v -s`
 - **Duration**: ~15-30 seconds
 - **Key Feature**: **Same sync logic tested with different coordination backends**
 
-**Legacy Multi-App Sync** - `tests/concurrency/test_sync_triggers.py` 
-- **Status**: Deprecated ⚠️
-- **Coverage**: Old Google Drive specific sync scenarios
-- **Command**: `python -m pytest tests/concurrency/test_sync_triggers.py -v -s` 
-- **Duration**: ~30 seconds
 
 ## Unified Sync Architecture
 
@@ -80,10 +74,10 @@ The unified sync architecture allows you to **test the same sync logic with diff
 python -m pytest tests/concurrency/test_unified_sync.py::TestUnifiedSyncConcurrency::test_manual_sync_conflicts[local_file] -v -s
 ```
 
-**Google Drive Coordination (production):**
+**Google Drive Coordination (with mocks):**
 ```bash
-# Same sync logic, different backend (when implemented)
-python -m pytest tests/concurrency/test_unified_sync.py::TestUnifiedSyncConcurrency::test_manual_sync_conflicts[google_drive] -v -s
+# Same sync logic, different backend (using mock Google Drive)
+python -m pytest tests/concurrency/test_unified_sync.py::TestBackendSpecificFeatures::test_google_drive_coordination -v -s
 ```
 
 ### Benefits of Unified Testing
@@ -101,7 +95,7 @@ python -m pytest tests/concurrency/test_unified_sync.py::TestUnifiedSyncConcurre
 python -m pytest tests/concurrency/test_unified_sync.py -k "local_file" -v -s
 ```
 
-**Test all backends (when Google Drive tests are enabled):**
+**Test all backends (LocalFile + Google Drive mocks):**
 ```bash
 python -m pytest tests/concurrency/test_unified_sync.py -v -s
 ```
