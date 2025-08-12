@@ -67,7 +67,9 @@ class TestPomodoroTimerCore:
         timer.start_sprint()
         
         assert timer.get_state() == TimerState.RUNNING
-        assert timer.get_time_remaining() == 60
+        # Allow for small timing variations due to thread startup
+        time_remaining = timer.get_time_remaining()
+        assert 58 <= time_remaining <= 60, f"Expected 58-60 seconds, got {time_remaining}"
         assert timer.start_time is not None
         
         timer.stop()
