@@ -7,7 +7,7 @@ This guide explains when and how to run the different test suites in the Pomodor
 | Test Type | Command | Duration | When to Run | Status |
 |-----------|---------|----------|-------------|--------|
 | Timer Unit Tests | `python -m pytest tests/unit/timer/ -v` | ~0.1s | During timer development | ✅ Working |
-| Working Unit Tests | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestDatabaseManager -v` | ~0.5s | Before commits | ✅ Working |
+| Working Unit Tests | `python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v` | ~0.5s | Before commits | ✅ Working |
 | Integration Tests | `python -m pytest tests/integration/ -v` | ~2-5s | Before releases | ⚠️ Has issues |
 | All Unit Tests | `python -m pytest tests/ -m unit -v` | ~5s | Weekly validation | ⚠️ Some issues |
 | **Unified Concurrency Tests** | `python -m pytest tests/concurrency/test_unified_sync.py -v -s` | ~15-30s | Before major releases | ✅ Working |
@@ -23,11 +23,17 @@ This guide explains when and how to run the different test suites in the Pomodor
 - **Command**: `python -m pytest tests/unit/timer/ -v`
 - **Duration**: ~0.1 seconds
 
-**Database Manager Tests** - `tests/unit/tracking/test_models.py::TestDatabaseManager`
-- **Status**: Partially working ✅
-- **Coverage**: Database initialization, basic CRUD operations
-- **Command**: `python -m pytest tests/unit/tracking/test_models.py::TestDatabaseManager -v`
+**Sprint Model Tests** - `tests/unit/tracking/test_models.py::TestSprint`
+- **Status**: Working ✅
+- **Coverage**: Sprint model functionality, database relationships
+- **Command**: `python -m pytest tests/unit/tracking/test_models.py::TestSprint -v`
 - **Duration**: ~0.2 seconds
+
+**Regression Tests** - `tests/unit/tracking/test_sync_merge_logic.py`, `tests/unit/tracking/test_backup_logic.py`
+- **Status**: Working ✅
+- **Coverage**: Critical bug prevention for Google Drive sync and backup issues
+- **Command**: `python -m pytest tests/unit/tracking/test_sync_merge_logic.py tests/unit/tracking/test_backup_logic.py -v`
+- **Duration**: ~0.3 seconds
 
 ### ⚠️ Tier 2: Integration Tests (Issues)
 
@@ -118,7 +124,7 @@ python -m pytest tests/unit/timer/ -v
 **Database Changes:**
 ```bash
 # Test database operations
-python -m pytest tests/unit/tracking/test_models.py::TestDatabaseManager -v
+python -m pytest tests/unit/tracking/test_models.py::TestSprint -v
 ```
 
 **Specific Feature Testing:**
@@ -147,7 +153,7 @@ python -m py_compile src/main.py
 **Enhanced Pre-Commit (if time permits):**
 ```bash
 # Include working database tests
-python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestDatabaseManager -v
+python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v
 ```
 
 ### Weekly/Release Validation
@@ -247,7 +253,7 @@ python -m pytest tests/unit/timer/ -v
 
 **For Database Development:**
 ```bash
-python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestDatabaseManager -v
+python -m pytest tests/unit/timer/ tests/unit/tracking/test_models.py::TestSprint -v
 ```
 
 **For Release Validation:**
