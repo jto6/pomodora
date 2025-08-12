@@ -95,6 +95,8 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         # Perform initial sync if using leader election
         if self.sync_manager:
             self._perform_initial_sync()
+            # Ensure tables exist after sync (sync might replace database with empty one)
+            self._ensure_tables_exist()
     
     def _initialize_database_engine(self) -> None:
         """Initialize SQLite database engine with optimal settings"""
@@ -184,6 +186,15 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         except Exception as e:
             error_print(f"Initial sync failed: {e}")
     
+    def _ensure_tables_exist(self) -> None:
+        """Ensure database tables exist, creating them if necessary"""
+        try:
+            # Create tables if they don't exist
+            Base.metadata.create_all(self.engine)
+            debug_print("Ensured database tables exist")
+        except Exception as e:
+            error_print(f"Failed to ensure tables exist: {e}")
+    
     def get_session(self):
         """Get a database session"""
         return self.Session()
@@ -205,16 +216,15 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             for cat_data in default_categories:
                 existing = session.query(TaskCategory).filter(TaskCategory.name == cat_data["name"]).first()
                 if not existing:
+                    # Create task category directly (don't use create_task_category method 
+                    # which auto-creates matching projects)
                     category = TaskCategory(name=cat_data["name"], color=cat_data["color"])
                     session.add(category)
                     debug_print(f"Added default category: {cat_data['name']}")
             
-            # Default projects
+            # Default projects - only "None" as default
             default_projects = [
-                {"name": "General", "color": "#3498db"},
-                {"name": "Personal", "color": "#2ecc71"},
-                {"name": "Work", "color": "#f39c12"},
-                {"name": "Learning", "color": "#9b59b6"}
+                {"name": "None", "color": "#3498db"}
             ]
             
             for proj_data in default_projects:

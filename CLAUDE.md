@@ -201,9 +201,7 @@ Since my editor flags trailing whitespaces (tab or space), make sure they are re
 
 ## Testing
 
-When Claude tries to run the app to debug itself, it should always use a local test database or create a temporary test version of the app that doesn't require credentials, so that
-- the production database isn't compromised
-- credentials are not required by Claude to access Google drive
+When Claude tries to run the app to debug itself, it should always run with a local database configuration so that Google Drive credentials are not required, and so that the production database isn't compromised.
 
 DO NOT try to run the app directly (eg, python src/main.py) without having a way to pass in options to use a local test database or otherwise avoid requiring Google API credentials.  If you create a test app that will interface with the database, it should access a local test database.
 

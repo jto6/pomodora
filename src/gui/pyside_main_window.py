@@ -7,7 +7,8 @@ from PySide6.QtCore import QTimer, QTime, Qt, Signal, QStringListModel
 from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction, QPixmap, QShortcut, QKeySequence
 from PySide6.QtSvg import QSvgRenderer
 from timer.pomodoro import PomodoroTimer, TimerState
-from tracking.models import DatabaseManager, TaskCategory, Project, Sprint
+from tracking.database_manager_unified import UnifiedDatabaseManager as DatabaseManager
+from tracking.models import TaskCategory, Project, Sprint
 from audio.alarm import play_alarm_async
 from utils.logging import verbose_print, error_print, info_print, debug_print, trace_print
 from utils.progress_wrapper import run_with_auto_progress
@@ -806,11 +807,22 @@ class ModernPomodoroWindow(QMainWindow):
 
                 debug_print(f"Project combo has {self.project_combo.count()} items (including separator if present)")
 
-                # Set default selection to first project if available
-                if self.project_combo.count() > 0:
+                # Set default selection to "None" project if available, otherwise first project
+                none_project_index = -1
+                for i in range(self.project_combo.count()):
+                    if self.project_combo.itemText(i) == "None":
+                        none_project_index = i
+                        break
+                
+                if none_project_index >= 0:
+                    self.project_combo.setCurrentIndex(none_project_index)
+                    debug_print(f"Set default project selection to 'None': (ID: {self.project_combo.currentData()})")
+                elif self.project_combo.count() > 0:
                     self.project_combo.setCurrentIndex(0)
-                    debug_print(f"Set default project selection: {self.project_combo.currentText()} (ID: {self.project_combo.currentData()})")
-                    # Initialize tracking variable
+                    debug_print(f"No 'None' project found, using first project: {self.project_combo.currentText()} (ID: {self.project_combo.currentData()})")
+                
+                # Initialize tracking variable
+                if self.project_combo.count() > 0:
                     self._last_project_text = self.project_combo.currentText()
             except Exception as e:
                 error_print(f"Error loading projects: {e}")

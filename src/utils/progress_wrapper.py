@@ -7,8 +7,28 @@ import time
 import threading
 from typing import Callable, Any, Optional
 from functools import wraps
-from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer, QObject, Signal, QThread
+
+# Optional PySide6 import for GUI functionality
+try:
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QTimer, QObject, Signal, QThread
+    PYSIDE6_AVAILABLE = True
+except ImportError:
+    # Create mock classes for testing environments
+    PYSIDE6_AVAILABLE = False
+    
+    class QObject:
+        pass
+    
+    class Signal:
+        def __init__(self, *args):
+            pass
+        
+        def connect(self, func):
+            pass
+            
+        def emit(self, *args):
+            pass
 
 
 class ProgressMonitor(QObject):
@@ -135,6 +155,10 @@ class ProgressCapableMixin:
         Returns:
             Result of the operation
         """
+        # If PySide6 is not available (testing environment), just run operation directly
+        if not PYSIDE6_AVAILABLE:
+            return operation()
+        
         # Import here to avoid circular imports
         try:
             from gui.components.sync_progress_dialog import show_sync_progress

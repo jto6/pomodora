@@ -11,13 +11,18 @@ def set_verbose_level(level: int):
     global VERBOSE_LEVEL
     VERBOSE_LEVEL = max(0, min(3, level))
 
+def get_verbose_level() -> int:
+    """Get current verbose level"""
+    return VERBOSE_LEVEL
+
 def set_verbose(enabled: bool):
     """Set verbose mode (for backward compatibility)"""
     set_verbose_level(1 if enabled else 0)
 
 def error_print(*args, **kwargs):
-    """Always print errors regardless of verbose level"""
-    print(*args, **kwargs)
+    """Always print errors to stderr regardless of verbose level"""
+    import sys
+    print(*args, file=sys.stderr, **kwargs)
 
 def info_print(*args, **kwargs):
     """Print informational messages at verbose level 1+"""
@@ -35,5 +40,5 @@ def trace_print(*args, **kwargs):
         print("[TRACE]", *args, **kwargs)
 
 def verbose_print(*args, **kwargs):
-    """Legacy function - same as info_print"""
-    info_print(*args, **kwargs)
+    """Legacy function - always prints for backward compatibility"""
+    print(*args, **kwargs)

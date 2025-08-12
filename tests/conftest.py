@@ -13,7 +13,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # Import after path setup
-from tracking.models import DatabaseManager, TaskCategory, Project
+import sys
+sys.path.insert(0, str(Path(__file__).parent))  # Add tests directory
+from helpers.test_database_manager import UnitTestDatabaseManager as DatabaseManager, TaskCategory, Project
 from tracking.local_settings import LocalSettingsManager
 from timer.pomodoro import PomodoroTimer
 

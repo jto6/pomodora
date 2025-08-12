@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from tracking.models import DatabaseManager, Project, TaskCategory, Sprint
+from .test_database_manager import UnitTestDatabaseManager as DatabaseManager, Project, TaskCategory, Sprint
 
 
 class TestDatabaseFactory:

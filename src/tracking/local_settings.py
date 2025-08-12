@@ -79,6 +79,8 @@ class LocalSettingsManager:
     def _save_settings(self):
         """Save current settings to file"""
         try:
+            # Ensure the parent directory exists
+            self.config_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.config_file, 'w') as f:
                 json.dump(self._settings, f, indent=2)
         except IOError as e:

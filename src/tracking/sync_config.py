@@ -8,7 +8,15 @@ from pathlib import Path
 
 from .coordination_backend import CoordinationBackend
 from .local_file_backend import LocalFileBackend
-from .google_drive_backend import GoogleDriveBackend
+
+# Optional Google Drive backend import
+try:
+    from .google_drive_backend import GoogleDriveBackend
+    GOOGLE_DRIVE_AVAILABLE = True
+except ImportError:
+    # Google Drive dependencies not available (testing/minimal environment)
+    GOOGLE_DRIVE_AVAILABLE = False
+    GoogleDriveBackend = None
 from .local_settings import get_local_settings
 from utils.logging import debug_print, error_print, info_print, trace_print
 
@@ -84,6 +92,10 @@ class SyncConfiguration:
                 # Check if credentials file exists first
                 if not Path(credentials_path).exists():
                     error_print(f"Google Drive credentials file not found: {credentials_path}")
+                    return None
+                
+                if not GOOGLE_DRIVE_AVAILABLE:
+                    error_print("Google Drive backend not available - missing dependencies")
                     return None
                 
                 try:

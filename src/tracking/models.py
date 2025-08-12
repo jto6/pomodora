@@ -1516,8 +1516,5 @@ class DatabaseManager(ProgressCapableMixin):
             session.close()
 
 
-# Import unified database manager for backward compatibility
-from .database_manager_unified import UnifiedDatabaseManager
-
-# Backward compatibility - expose as DatabaseManager
-DatabaseManager = UnifiedDatabaseManager
+# Backward compatibility alias is now handled in database_manager_unified.py
+# to avoid circular imports

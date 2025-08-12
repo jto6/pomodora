@@ -14,7 +14,7 @@ import os
 
 from utils.logging import (
     verbose_print, error_print, info_print, debug_print, trace_print,
-    set_verbose_level, set_verbose, VERBOSE_LEVEL
+    set_verbose_level, set_verbose, get_verbose_level
 )
 
 
@@ -138,45 +138,45 @@ class TestLoggingSetup:
     
     def test_verbose_level_setting(self):
         """Test setting verbose levels"""
-        original_level = VERBOSE_LEVEL
+        original_level = get_verbose_level()
         
         try:
             # Test level setting
             set_verbose_level(2)
-            assert VERBOSE_LEVEL == 2
+            assert get_verbose_level() == 2
             
             set_verbose_level(0)
-            assert VERBOSE_LEVEL == 0
+            assert get_verbose_level() == 0
             
             set_verbose_level(3)
-            assert VERBOSE_LEVEL == 3
+            assert get_verbose_level() == 3
             
             # Test bounds checking
             set_verbose_level(-1)
-            assert VERBOSE_LEVEL == 0
+            assert get_verbose_level() == 0
             
             set_verbose_level(10)
-            assert VERBOSE_LEVEL == 3
+            assert get_verbose_level() == 3
         finally:
             # Restore original level
             set_verbose_level(original_level)
     
     def test_verbose_compatibility_function(self):
         """Test backward compatibility verbose function"""
-        original_level = VERBOSE_LEVEL
+        original_level = get_verbose_level()
         
         try:
             set_verbose(True)
-            assert VERBOSE_LEVEL == 1
+            assert get_verbose_level() == 1
             
             set_verbose(False)
-            assert VERBOSE_LEVEL == 0
+            assert get_verbose_level() == 0
         finally:
             set_verbose_level(original_level)
     
     def test_verbose_level_affects_output(self, capsys):
         """Test that verbose level affects what gets printed"""
-        original_level = VERBOSE_LEVEL
+        original_level = get_verbose_level()
         
         try:
             # Level 0 - only errors
@@ -187,7 +187,7 @@ class TestLoggingSetup:
             trace_print("Trace message")
             
             captured = capsys.readouterr()
-            assert "Error message" in captured.out
+            assert "Error message" in captured.err  # Errors go to stderr
             assert "Info message" not in captured.out
             assert "Debug message" not in captured.out
             assert "Trace message" not in captured.out
@@ -200,7 +200,7 @@ class TestLoggingSetup:
             trace_print("Trace message 1")
             
             captured = capsys.readouterr()
-            assert "Error message 1" in captured.out
+            assert "Error message 1" in captured.err  # Errors go to stderr
             assert "Info message 1" in captured.out
             assert "Debug message 1" not in captured.out
             assert "Trace message 1" not in captured.out
@@ -280,7 +280,7 @@ class TestLoggingFileOutput:
         # Current implementation doesn't support file logging
         # This test verifies the logging functions work for console output
         
-        original_level = VERBOSE_LEVEL
+        original_level = get_verbose_level()
         try:
             set_verbose_level(2)
             
@@ -297,7 +297,7 @@ class TestLoggingFileOutput:
     
     def test_console_logging_robustness(self):
         """Test robustness of console logging"""
-        original_level = VERBOSE_LEVEL
+        original_level = get_verbose_level()
         
         try:
             # Test all levels work
@@ -344,7 +344,7 @@ class TestLoggingErrorHandling:
         """Test logging behavior during application shutdown"""
         # Test that logging functions work during shutdown scenarios
         
-        original_level = VERBOSE_LEVEL
+        original_level = get_verbose_level()
         try:
             set_verbose_level(1)
             

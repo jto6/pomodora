@@ -4,9 +4,13 @@ Tests CRUD operations, foreign key relationships, and data validation.
 """
 
 import pytest
+import sys
+import os
 from datetime import datetime, timedelta
 
-from tracking.models import Project, TaskCategory, Sprint
+# Add tests directory to path for helper imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from helpers.test_database_manager import Project, TaskCategory, Sprint
 
 
 @pytest.mark.unit
