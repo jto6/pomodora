@@ -4,6 +4,8 @@ This guide explains when and how to run the different test suites in the Pomodor
 
 ## Quick Reference
 
+**⚠️ IMPORTANT: All commands require activated venv: `source venv/bin/activate`**
+
 | Test Type | Command | Duration | When to Run | Status |
 |-----------|---------|----------|-------------|--------|
 | Timer Unit Tests | `python -m pytest tests/unit/timer/ -v` | ~0.1s | During timer development | ✅ Working |
@@ -238,17 +240,26 @@ python -m pytest tests/ -m gui -v           # GUI tests (when implemented)
 
 ### Environment Setup
 
-**Always use virtual environment:**
+**CRITICAL: Always use virtual environment for tests:**
 ```bash
-# Activate environment
+# Activate environment (REQUIRED!)
 source venv/bin/activate
+
+# Verify you're in the venv (should show venv path)
+which python
+which pytest
 
 # Install test dependencies (if not already installed)
 pip install -r tests/requirements_test.txt
 
-# Run tests
+# Run tests (PySide6 must be available)
 python -m pytest [options]
 ```
+
+**⚠️ Common Issue: PySide6 Import Errors**
+- **Problem**: Tests fail with `ModuleNotFoundError: No module named 'PySide6'`
+- **Cause**: Running tests with system Python instead of venv Python
+- **Solution**: Always activate venv first - tests need the same environment as the app
 
 ## Current Status Summary
 

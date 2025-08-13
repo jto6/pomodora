@@ -242,7 +242,7 @@ class ModernPomodoroWindow(QMainWindow):
 
     def init_ui(self):
         """Initialize the modern UI layout"""
-        self.setWindowTitle("Pomodora - Modern Pomodoro Timer")
+        self.setWindowTitle("Pomodora")
         self.setFixedSize(*self.normal_size)  # Use the defined normal size
 
         # Central widget and main layout

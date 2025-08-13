@@ -42,7 +42,8 @@ python src/main.py -vvv        # Trace level (very detailed tracing)
 # Run in silent mode (no audio alarms)
 python src/main.py --no-audio
 
-# Run tests (if implemented)
+# Run tests (IMPORTANT: must be run from activated venv)
+source venv/bin/activate  # Activate venv first!
 python -m pytest tests/
 
 # Check syntax
