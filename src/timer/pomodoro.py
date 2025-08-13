@@ -128,10 +128,14 @@ class PomodoroTimer:
                         self.current_time = max(0, self.sprint_duration - elapsed)
 
                         if self.current_time <= 0:
-                            # Sprint completed
+                            # Sprint completed - calculate when it actually completed
+                            actual_sprint_completion_time = self.start_time + timedelta(seconds=self.sprint_duration)
                             self.state = TimerState.BREAK
-                            self.current_time = self.break_duration
-                            self.break_start_time = datetime.now()  # Preserve original start_time for sprint duration
+                            self.break_start_time = actual_sprint_completion_time
+                            
+                            # Calculate remaining break time (handles hibernation correctly)
+                            break_elapsed = (datetime.now() - self.break_start_time).total_seconds()
+                            self.current_time = max(0, self.break_duration - break_elapsed)
 
                             if self.on_sprint_complete:
                                 threading.Thread(target=self.on_sprint_complete, daemon=True).start()

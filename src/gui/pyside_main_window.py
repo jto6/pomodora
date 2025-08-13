@@ -44,6 +44,9 @@ class ModernPomodoroWindow(QMainWindow):
             debug_print(f"App startup: Found {len(existing_sprints)} existing sprints for today")
         except Exception as e:
             error_print(f"Error checking existing sprints: {e}")
+
+        # Hibernation recovery: auto-complete sprints that were interrupted by system sleep
+        self._recover_hibernated_sprints()
         self.pomodoro_timer = PomodoroTimer()
 
         # Set up timer callbacks using thread-safe signals
@@ -1001,6 +1004,20 @@ class ModernPomodoroWindow(QMainWindow):
         """Main thread handler for sprint completion"""
         info_print("Sprint completed - playing alarm and starting break")
 
+        # Auto-save sprint to database when timer completes
+        # This ensures sprints are saved even after hibernation resume
+        if (hasattr(self, 'current_project_id') and self.current_project_id and
+            hasattr(self, 'current_task_category_id') and self.current_task_category_id and
+            hasattr(self, 'current_task_description') and self.current_task_description and
+            hasattr(self, 'sprint_start_time') and self.sprint_start_time):
+            
+            try:
+                debug_print("Auto-saving sprint on timer completion")
+                self._save_current_sprint()
+                info_print("✓ Sprint auto-saved on timer completion")
+            except Exception as e:
+                error_print(f"Failed to auto-save sprint on timer completion: {e}")
+
         # Get alarm settings
         from tracking.local_settings import get_local_settings
         settings = get_local_settings()
@@ -1074,37 +1091,8 @@ class ModernPomodoroWindow(QMainWindow):
                 project_name = project.name if project else "Unknown"
                 debug_print(f"Project name resolved: {project_name}")
 
-                # Use the preserved sprint start time and calculate duration
-                start_time = self.sprint_start_time
-                end_time = datetime.now()
-                
-                if start_time is None:
-                    error_print("Sprint start time is None, cannot complete sprint")
-                    return
-                    
-                actual_duration = (end_time - start_time).total_seconds()
-                debug_print(f"Using preserved sprint start time: {start_time}")
-                debug_print(f"Calculated duration: {actual_duration}s, start_time: {start_time}")
-
-                # Ensure task description is not None
-                task_desc = self.current_task_description or "Pomodoro Sprint"
-                debug_print(f"Task description for sprint save: original='{self.current_task_description}', final='{task_desc}'")
-
-                sprint = Sprint(
-                    project_id=self.current_project_id,
-                    task_category_id=self.current_task_category_id,
-                    task_description=task_desc,
-                    start_time=start_time,
-                    end_time=end_time,
-                    completed=True,
-                    duration_minutes=int(actual_duration / 60),
-                    planned_duration=int(self.pomodoro_timer.sprint_duration / 60)
-                )
-                debug_print(f"Created sprint object: {sprint.task_description}, duration: {actual_duration}s")
-
-                # Save to database
-                debug_print("Calling db_manager.add_sprint()...")
-                self.db_manager.add_sprint(sprint)
+                # Use the shared sprint saving logic
+                self._save_current_sprint()
                 info_print("✓ Sprint saved to database successfully")
 
                 # Verify it was saved
@@ -1213,6 +1201,124 @@ class ModernPomodoroWindow(QMainWindow):
                     debug_print("Idle sync failed or was skipped")
         except Exception as e:
             error_print(f"Error during idle sync: {e}")
+
+    def _recover_hibernated_sprints(self):
+        """
+        Auto-complete sprints that were interrupted by hibernation/system sleep.
+        
+        Finds incomplete sprints where enough time has passed since start_time
+        to consider them completed, then marks them as completed with appropriate
+        end_time and duration.
+        """
+        try:
+            from datetime import datetime, timedelta
+            from tracking.models import Sprint
+            
+            session = self.db_manager.get_session()
+            
+            # Find incomplete sprints (started but not completed)
+            incomplete_sprints = session.query(Sprint).filter(
+                Sprint.completed == False,
+                Sprint.interrupted == False,
+                Sprint.start_time.isnot(None),
+                Sprint.end_time.is_(None)
+            ).all()
+            
+            if not incomplete_sprints:
+                debug_print("Hibernation recovery: No incomplete sprints found")
+                session.close()
+                return
+                
+            debug_print(f"Hibernation recovery: Found {len(incomplete_sprints)} incomplete sprints")
+            
+            recovered_count = 0
+            now = datetime.now()
+            
+            for sprint in incomplete_sprints:
+                # Calculate how much time has passed since sprint started
+                elapsed_time = now - sprint.start_time
+                planned_duration_timedelta = timedelta(minutes=sprint.planned_duration)
+                
+                # If enough time has passed for the sprint to be considered complete
+                if elapsed_time >= planned_duration_timedelta:
+                    # Auto-complete the sprint
+                    sprint.end_time = sprint.start_time + planned_duration_timedelta
+                    sprint.duration_minutes = sprint.planned_duration
+                    sprint.completed = True
+                    
+                    info_print(f"Hibernation recovery: Auto-completed sprint '{sprint.task_description}' "
+                             f"(started {sprint.start_time.strftime('%H:%M')}, "
+                             f"elapsed {elapsed_time.total_seconds()/60:.1f} min)")
+                    recovered_count += 1
+                else:
+                    # Sprint is still within its planned duration - could be a legitimate pause
+                    remaining_time = planned_duration_timedelta - elapsed_time
+                    debug_print(f"Hibernation recovery: Sprint '{sprint.task_description}' still active "
+                               f"({remaining_time.total_seconds()/60:.1f} min remaining)")
+            
+            if recovered_count > 0:
+                session.commit()
+                info_print(f"Hibernation recovery: Successfully recovered {recovered_count} sprint(s)")
+                
+                # Update UI stats to reflect recovered sprints
+                if hasattr(self, 'update_stats'):
+                    self.update_stats()
+            else:
+                debug_print("Hibernation recovery: No sprints needed recovery")
+                
+            session.close()
+            
+        except Exception as e:
+            error_print(f"Error during hibernation recovery: {e}")
+            if 'session' in locals():
+                session.rollback()
+                session.close()
+
+    def _save_current_sprint(self):
+        """
+        Save the current sprint to database.
+        
+        Extracted from complete_sprint() to enable auto-saving on timer completion
+        without duplicating the sprint saving logic.
+        """
+        from datetime import datetime
+        from tracking.models import Sprint
+        
+        # Use the preserved sprint start time and calculate duration
+        start_time = self.sprint_start_time
+        end_time = datetime.now()
+        
+        if start_time is None:
+            error_print("Sprint start time is None, cannot save sprint")
+            return
+            
+        actual_duration = (end_time - start_time).total_seconds()
+        debug_print(f"Saving sprint: start={start_time}, duration={actual_duration}s")
+
+        # Ensure task description is not None
+        task_desc = self.current_task_description or "Pomodoro Sprint"
+        debug_print(f"Task description for sprint save: '{task_desc}'")
+
+        sprint = Sprint(
+            project_id=self.current_project_id,
+            task_category_id=self.current_task_category_id,
+            task_description=task_desc,
+            start_time=start_time,
+            end_time=end_time,
+            completed=True,
+            duration_minutes=int(actual_duration / 60),
+            planned_duration=int(self.pomodoro_timer.sprint_duration / 60)
+        )
+        debug_print(f"Created sprint object: {sprint.task_description}, duration: {actual_duration}s")
+
+        # Save to database
+        debug_print("Calling db_manager.add_sprint()...")
+        self.db_manager.add_sprint(sprint)
+        debug_print("Sprint saved to database successfully")
+
+        # Update statistics
+        if hasattr(self, 'update_stats'):
+            self.update_stats()
 
     def reset_ui(self):
         """Reset UI to initial state"""
