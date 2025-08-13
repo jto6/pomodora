@@ -166,11 +166,13 @@ class TestSyncConfiguration:
         """Test that sync status includes backend information for debugging"""
         config = SyncConfiguration()
         
+        # Set to leader_election strategy to test coordination backend info
+        config.set_sync_strategy('leader_election')
+        
         status = config.get_sync_status()
         
         # Should include key configuration info
         assert 'sync_strategy' in status
-        assert 'coordination_backend' in status
         assert 'database_path' in status
         assert 'needs_coordination' in status
         

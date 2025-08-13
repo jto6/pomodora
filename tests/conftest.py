@@ -30,8 +30,18 @@ def protect_production_settings():
         temp_settings_path = temp_file.name
     
     try:
-        # Patch LocalSettingsManager.get_config_path to use temp file
-        with patch.object(LocalSettingsManager, 'get_config_path', return_value=temp_settings_path):
+        # Need to patch at the right level - the get_local_settings function
+        from tracking.local_settings import get_local_settings
+        
+        # Create an isolated LocalSettingsManager for tests
+        test_settings_manager = LocalSettingsManager()
+        # Override its config file path
+        test_settings_manager.config_file = Path(temp_settings_path)
+        test_settings_manager._settings = test_settings_manager.defaults.copy()
+        
+        # Patch the get_local_settings function everywhere it's used
+        with patch('tracking.local_settings.get_local_settings', return_value=test_settings_manager), \
+             patch('tracking.sync_config.get_local_settings', return_value=test_settings_manager):
             yield
     finally:
         # Clean up
