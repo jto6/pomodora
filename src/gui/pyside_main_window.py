@@ -1128,9 +1128,8 @@ class ModernPomodoroWindow(QMainWindow):
             self.sprint_start_time = None
             debug_print("Sprint completion finished")
             
-            # Exit compact mode when completing sprint
-            if self.compact_mode:
-                self.toggle_compact_mode()
+            # Note: Stay in compact mode after sprint completion
+            # User must click or manually toggle to exit compact mode
         except Exception as e:
             error_print(f"Error completing sprint: {e}")
             import traceback
