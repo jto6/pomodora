@@ -258,3 +258,5 @@ Examples:
 - `sync: implement leader election for multi-workstation deployment`
 
 Only commit files that are part of the development.  Do not commit all files blindly or include files that were not part of the development effort that is being committed.
+
+Before each commit, run the full set of tests to ensure that the commit isn't breaking any of them.
