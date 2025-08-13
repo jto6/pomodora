@@ -186,6 +186,9 @@ The application includes an automatic backup system that protects your data with
 ### Backup Types and Retention
 
 - **Daily Backups** (`Backup/Daily/`): Created automatically, keeps last 7 days
+  - **Smart Daily Logic**: Only ONE backup created per day, regardless of how many times the app runs
+  - **No Overwrites**: Each daily backup has a unique timestamp (`YYYYMMDD_HHMMSS`)
+  - **Multiple Operations**: Second sprint, third sprint, etc. on same day are skipped - "Daily backup already exists for today"
 - **Monthly Backups** (`Backup/Monthly/`): Created once per month, keeps last 12 months
 - **Yearly Backups** (`Backup/Yearly/`): Created once per year, kept indefinitely
 
@@ -196,6 +199,8 @@ Backups are created automatically when:
 - Default categories/projects are initialized
 - New categories or projects are created
 - Sprints are completed and saved
+
+**Important**: Multiple operations on the same day will NOT create multiple daily backups. The system checks for existing daily backups and skips creation if one already exists for today.
 
 ### File Naming Convention
 
