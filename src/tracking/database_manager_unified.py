@@ -139,15 +139,18 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             if self.coordination_backend and hasattr(self.coordination_backend, 'shared_db_path'):
                 # Local file backend - backup shared database
                 shared_path = Path(self.coordination_backend.shared_db_path)
-                backup_base_dir = shared_path.parent / 'Backup'
+                backup_base_dir = shared_path.parent
                 self.backup_manager = DatabaseBackupManager(str(shared_path), str(backup_base_dir))
             else:
-                # Google Drive backend - backup local cache
-                backup_base_dir = self.db_path.parent / 'Backup'
+                # Google Drive backend - use dedicated google_drive_backups directory
+                from pathlib import Path
+                config_dir = Path.home() / '.config' / 'pomodora'
+                backup_base_dir = config_dir / 'google_drive_backups'
+                backup_base_dir.mkdir(parents=True, exist_ok=True)
                 self.backup_manager = DatabaseBackupManager(str(self.db_path), str(backup_base_dir))
         else:
             # Local only - backup local database
-            backup_base_dir = self.db_path.parent / 'Backup'
+            backup_base_dir = self.db_path.parent
             self.backup_manager = DatabaseBackupManager(str(self.db_path), str(backup_base_dir))
         
         debug_print(f"Backup manager initialized: {self.backup_manager.backup_dir}")
