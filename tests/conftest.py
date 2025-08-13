@@ -18,6 +18,25 @@ sys.path.insert(0, str(Path(__file__).parent))  # Add tests directory
 from helpers.test_database_manager import UnitTestDatabaseManager as DatabaseManager, TaskCategory, Project
 from tracking.local_settings import LocalSettingsManager
 from timer.pomodoro import PomodoroTimer
+from unittest.mock import patch
+
+
+@pytest.fixture(scope="function", autouse=True)
+def protect_production_settings():
+    """Automatically protect production settings from being modified by tests"""
+    # Create a temporary settings file for ALL tests
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+        temp_file.write('{"sync_strategy": "local_only"}')  # Minimal safe config
+        temp_settings_path = temp_file.name
+    
+    try:
+        # Patch LocalSettingsManager.get_config_path to use temp file
+        with patch.object(LocalSettingsManager, 'get_config_path', return_value=temp_settings_path):
+            yield
+    finally:
+        # Clean up
+        if os.path.exists(temp_settings_path):
+            os.unlink(temp_settings_path)
 
 
 @pytest.fixture(scope="function")

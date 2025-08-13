@@ -10,10 +10,11 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from tracking.database_manager_unified import UnifiedDatabaseManager
 from tracking.sync_config import SyncConfiguration
+from tracking.local_settings import LocalSettingsManager
 from tracking.models import Project, TaskCategory, Sprint
 
 
@@ -29,6 +30,7 @@ class UnifiedSyncSimulator:
         self.instances = []
         self.sync_events = []
         self.errors = []
+        self.temp_settings_files = []  # Track temp files for cleanup
         
         # Create test environment based on backend type
         if backend_type == "local_file":
@@ -37,6 +39,26 @@ class UnifiedSyncSimulator:
             self._setup_google_drive_test()
         else:
             raise ValueError(f"Unknown backend type: {backend_type}")
+    
+    def _create_isolated_sync_config(self) -> SyncConfiguration:
+        """Create a SyncConfiguration with isolated temporary settings"""
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        temp_file.write('{"sync_strategy": "local_only"}')  # Start with minimal config
+        temp_file.close()
+        
+        temp_settings_path = temp_file.name
+        self.temp_settings_files.append(temp_settings_path)
+        
+        # Patch the settings manager to use this temp file
+        patcher = patch.object(LocalSettingsManager, 'get_config_path', return_value=temp_settings_path)
+        patcher.start()
+        
+        # Store patcher so we can stop it in cleanup
+        if not hasattr(self, 'patchers'):
+            self.patchers = []
+        self.patchers.append(patcher)
+        
+        return SyncConfiguration()
     
     def _setup_local_file_test(self) -> None:
         """Set up local file backend test environment"""
@@ -47,7 +69,7 @@ class UnifiedSyncSimulator:
         # Create sync configurations for each instance
         self.sync_configs = []
         for i in range(self.num_instances):
-            config = SyncConfiguration()
+            config = self._create_isolated_sync_config()
             config.set_local_file_backend(str(self.shared_db_path))
             # Each instance has its own local cache
             cache_path = self.test_dir / f"cache_{i}" / "pomodora.db" 
@@ -71,7 +93,7 @@ class UnifiedSyncSimulator:
         # Create sync configurations for each instance
         self.sync_configs = []
         for i in range(self.num_instances):
-            config = SyncConfiguration()
+            config = self._create_isolated_sync_config()
             # Use mock credentials (won't actually connect to Google Drive)
             config.set_google_drive_backend("mock_credentials.json", "TestFolder")
             # Each instance has its own local cache
@@ -356,6 +378,22 @@ class UnifiedSyncSimulator:
             try:
                 if hasattr(instance, 'engine') and instance.engine:
                     instance.engine.dispose()
+            except:
+                pass
+        
+        # Stop patches for isolated settings
+        if hasattr(self, 'patchers'):
+            for patcher in self.patchers:
+                try:
+                    patcher.stop()
+                except:
+                    pass
+        
+        # Clean up temporary settings files
+        for temp_file in self.temp_settings_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
             except:
                 pass
         
