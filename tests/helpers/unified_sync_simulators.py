@@ -67,9 +67,10 @@ class UnifiedSyncSimulator:
         self.shared_db_path = self.test_dir / "shared_pomodora.db"
         
         # Create sync configurations for each instance
+        # NOTE: Using SyncConfiguration() directly - global autouse fixture should protect production settings
         self.sync_configs = []
         for i in range(self.num_instances):
-            config = self._create_isolated_sync_config()
+            config = SyncConfiguration()
             config.set_local_file_backend(str(self.shared_db_path))
             # Each instance has its own local cache
             cache_path = self.test_dir / f"cache_{i}" / "pomodora.db" 
@@ -91,9 +92,10 @@ class UnifiedSyncSimulator:
         self.coordination_lock = threading.Lock()
         
         # Create sync configurations for each instance
+        # NOTE: Using SyncConfiguration() directly - global autouse fixture should protect production settings
         self.sync_configs = []
         for i in range(self.num_instances):
-            config = self._create_isolated_sync_config()
+            config = SyncConfiguration()
             # Use mock credentials (won't actually connect to Google Drive)
             config.set_google_drive_backend("mock_credentials.json", "TestFolder")
             # Each instance has its own local cache
