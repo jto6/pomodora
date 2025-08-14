@@ -374,6 +374,9 @@ class ModernPomodoroWindow(QMainWindow):
         main_text = self.start_button.text()
         timer_state = self.pomodoro_timer.get_state()
 
+        # Sync complete button text with main button
+        self.compact_complete_button.setText(self.complete_button.text())
+
         if "Start" in main_text and timer_state == TimerState.STOPPED:
             # Hide start button in compact mode - user needs to use main interface to start new sprints
             self.compact_start_button.hide()
@@ -1090,19 +1093,35 @@ class ModernPomodoroWindow(QMainWindow):
         debug_print(f"Timer remaining: {self.pomodoro_timer.get_time_remaining()}")
 
         try:
-            # Save sprint to database
-            if self.current_project_id is not None:
-                debug_print(f"✓ Validation passed - saving sprint: {self.current_task_description} for project {self.current_project_id}")
+            # Check timer state to determine action
+            timer_state = self.pomodoro_timer.get_state()
+            
+            if timer_state == TimerState.RUNNING:
+                # Sprint is still running - save it and stop timer
+                if self.current_project_id is not None:
+                    debug_print(f"✓ Manual sprint completion during timer - saving sprint: {self.current_task_description} for project {self.current_project_id}")
 
-                # Get project name from ID
-                project = self.db_manager.get_project_by_id(self.current_project_id)
-                project_name = project.name if project else "Unknown"
-                debug_print(f"Project name resolved: {project_name}")
+                    # Get project name from ID
+                    project = self.db_manager.get_project_by_id(self.current_project_id)
+                    project_name = project.name if project else "Unknown"
+                    debug_print(f"Project name resolved: {project_name}")
 
-                # Use the shared sprint saving logic
-                self._save_current_sprint()
-                info_print("✓ Sprint saved to database successfully")
+                    # Use the shared sprint saving logic
+                    self._save_current_sprint()
+                    info_print("✓ Sprint saved to database successfully")
+                else:
+                    error_print(f"❌ Cannot save sprint - no project selected (project_id: {self.current_project_id})")
+                    
+            elif timer_state == TimerState.BREAK:
+                # During break - sprint already auto-saved, just reset UI
+                debug_print("During break - sprint already saved, just resetting UI")
+                info_print("✓ Break ended - returning to ready state")
+            else:
+                debug_print(f"Complete sprint called in unexpected state: {timer_state}")
+                info_print("✓ Returning to ready state")
 
+            # Update auto-completion and stats (if sprint was saved)
+            if timer_state == TimerState.RUNNING:
                 # Verify it was saved
                 from datetime import date
                 today_sprints = self.db_manager.get_sprints_by_date(date.today())
@@ -1110,9 +1129,6 @@ class ModernPomodoroWindow(QMainWindow):
 
                 # Update auto-completion with the new task description
                 self.update_task_autocompletion()
-
-            else:
-                error_print(f"❌ Cannot save sprint - no project selected (project_id: {self.current_project_id})")
 
             self.pomodoro_timer.stop()
             self.qt_timer.stop()
@@ -1690,16 +1706,19 @@ class ModernPomodoroWindow(QMainWindow):
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)
             self.complete_button.setEnabled(True)
+            self.complete_button.setText("Complete Sprint")
             self.state_label.setText("Focus Time! 🎯")
         elif timer_state == TimerState.PAUSED:
             self.start_button.setText("Resume")
             self.stop_button.setEnabled(True)
             self.complete_button.setEnabled(True)
+            self.complete_button.setText("Complete Sprint")
             self.state_label.setText("Paused ⏸️")
         elif timer_state == TimerState.BREAK:
             self.start_button.setText("Start")
             self.stop_button.setEnabled(False)  # No need to stop during break
-            self.complete_button.setEnabled(True)  # Allow completing sprint during break
+            self.complete_button.setEnabled(True)  # Allow ending break
+            self.complete_button.setText("Done")
             self.state_label.setText("Break Time! ☕")
 
     def on_project_changed(self, project_text):
