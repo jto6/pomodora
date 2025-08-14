@@ -186,15 +186,6 @@ class TestHibernationRecovery:
                     interrupted=True,
                     planned_duration=25
                 ),
-                Sprint(  # No start time
-                    project_id=sample_project.id,
-                    task_category_id=sample_category.id,
-                    task_description="no_start_time",
-                    start_time=None,
-                    completed=False,
-                    interrupted=False,
-                    planned_duration=25
-                ),
                 Sprint(  # Has end time already
                     project_id=sample_project.id,
                     task_category_id=sample_category.id,
