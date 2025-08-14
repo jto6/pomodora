@@ -1241,12 +1241,18 @@ class ModernPomodoroWindow(QMainWindow):
             session = self.db_manager.get_session()
             
             # Find incomplete sprints (started but not completed)
+            debug_print("Hibernation recovery: Querying for incomplete sprints...")
             incomplete_sprints = session.query(Sprint).filter(
                 Sprint.completed == False,
                 Sprint.interrupted == False,
                 Sprint.start_time.isnot(None),
                 Sprint.end_time.is_(None)
             ).all()
+            
+            # Debug: Log what we found
+            debug_print(f"Hibernation recovery: Query found {len(incomplete_sprints)} sprints matching criteria")
+            for sprint in incomplete_sprints:
+                debug_print(f"  - Sprint ID {sprint.id}: '{sprint.task_description}' started {sprint.start_time}, completed={sprint.completed}, interrupted={sprint.interrupted}, end_time={sprint.end_time}")
             
             if not incomplete_sprints:
                 debug_print("Hibernation recovery: No incomplete sprints found")
@@ -1256,6 +1262,7 @@ class ModernPomodoroWindow(QMainWindow):
             debug_print(f"Hibernation recovery: Found {len(incomplete_sprints)} incomplete sprints")
             
             recovered_count = 0
+            recovered_sprints = []  # Track which sprints were actually recovered
             now = datetime.now()
             
             for sprint in incomplete_sprints:
@@ -1271,6 +1278,9 @@ class ModernPomodoroWindow(QMainWindow):
                     sprint.completed = True
                     sprint.interrupted = False  # Ensure not marked as interrupted
                     
+                    # Add to recovered list for operation tracking
+                    recovered_sprints.append(sprint)
+                    
                     info_print(f"Hibernation recovery: Auto-completed sprint '{sprint.task_description}' "
                              f"(started {sprint.start_time.strftime('%H:%M')}, "
                              f"elapsed {elapsed_time.total_seconds()/60:.1f} min)")
@@ -1284,6 +1294,37 @@ class ModernPomodoroWindow(QMainWindow):
             if recovered_count > 0:
                 session.commit()
                 info_print(f"Hibernation recovery: Successfully recovered {recovered_count} sprint(s)")
+                
+                # Track hibernation recovery as operations for sync - only for sprints that were actually recovered
+                debug_print(f"Hibernation recovery: Tracking operations for {len(recovered_sprints)} recovered sprints")
+                for sprint in recovered_sprints:
+                    debug_print(f"Hibernation recovery: Tracking operation for sprint ID {sprint.id}")
+                    self.db_manager.operation_tracker.track_operation(
+                        'update',
+                        'sprints', 
+                        {
+                            'id': sprint.id, 
+                            'end_time': sprint.end_time.isoformat(),
+                            'duration_minutes': sprint.duration_minutes,
+                            'completed': True,
+                            'interrupted': False
+                        }
+                    )
+                
+                # Check pending operations before sync
+                pending_ops = self.db_manager.operation_tracker.get_pending_operations()
+                debug_print(f"Hibernation recovery: Found {len(pending_ops)} pending operations before sync")
+                
+                # Trigger sync to upload hibernation recovery changes to Google Drive
+                if hasattr(self.db_manager, 'sync_manager') and self.db_manager.sync_manager:
+                    try:
+                        debug_print("Hibernation recovery: Triggering sync to upload recovered sprints")
+                        self.db_manager.trigger_manual_sync()
+                        debug_print("Hibernation recovery: Sync completed successfully")
+                    except Exception as sync_error:
+                        error_print(f"Failed to sync hibernation recovery changes: {sync_error}")
+                else:
+                    debug_print("Hibernation recovery: No sync manager available - changes will sync on next startup")
                 
                 # Update UI stats to reflect recovered sprints
                 if hasattr(self, 'update_stats') and hasattr(self, 'stats_label'):
