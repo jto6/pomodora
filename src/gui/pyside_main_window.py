@@ -1070,8 +1070,16 @@ class ModernPomodoroWindow(QMainWindow):
         thread = threading.Thread(target=play_alarm, daemon=True)
         thread.start()
 
-        # Auto-complete the sprint (now safe to call from main thread)
-        self.complete_sprint()
+        # Sprint was already saved during timer completion, just reset UI
+        self.pomodoro_timer.stop()
+        self.qt_timer.stop()
+        self.reset_ui()
+        self.state_label.setText("Sprint Completed! 🎉")
+        self.update_stats()
+        
+        # Clear preserved sprint start time after successful completion
+        self.sprint_start_time = None
+        debug_print("Break completed - sprint already saved, UI reset")
 
     def complete_sprint(self):
         """Complete the current sprint"""
