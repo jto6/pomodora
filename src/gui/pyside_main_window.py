@@ -1253,6 +1253,7 @@ class ModernPomodoroWindow(QMainWindow):
                     sprint.end_time = sprint.start_time + planned_duration_timedelta
                     sprint.duration_minutes = sprint.planned_duration
                     sprint.completed = True
+                    sprint.interrupted = False  # Ensure not marked as interrupted
                     
                     info_print(f"Hibernation recovery: Auto-completed sprint '{sprint.task_description}' "
                              f"(started {sprint.start_time.strftime('%H:%M')}, "
@@ -1314,6 +1315,7 @@ class ModernPomodoroWindow(QMainWindow):
             start_time=start_time,
             end_time=end_time,
             completed=True,
+            interrupted=False,
             duration_minutes=int(actual_duration / 60),
             planned_duration=int(self.pomodoro_timer.sprint_duration / 60)
         )
