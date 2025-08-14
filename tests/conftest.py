@@ -7,6 +7,7 @@ import pytest
 import tempfile
 import os
 import sys
+import json
 from pathlib import Path
 
 # Add src to Python path for imports
@@ -24,29 +25,57 @@ from unittest.mock import patch
 @pytest.fixture(scope="function", autouse=True)
 def protect_production_settings():
     """Automatically protect production settings from being modified by tests"""
-    # Create a temporary settings file for ALL tests
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
-        temp_file.write('{"sync_strategy": "local_only"}')  # Minimal safe config
-        temp_settings_path = temp_file.name
+    import tempfile
+    import shutil
     
-    try:
-        # Need to patch at the right level - the get_local_settings function
-        from tracking.local_settings import get_local_settings
+    # Create a completely isolated temporary directory for all test settings
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_config_dir = Path(temp_dir)
+        temp_settings_file = temp_config_dir / 'settings.json'
         
-        # Create an isolated LocalSettingsManager for tests
-        test_settings_manager = LocalSettingsManager()
-        # Override its config file path
-        test_settings_manager.config_file = Path(temp_settings_path)
+        # Write minimal safe test config
+        with open(temp_settings_file, 'w') as f:
+            json.dump({
+                "sync_strategy": "local_only",
+                "coordination_backend": {
+                    "type": "local_file",
+                    "local_file": {
+                        "shared_db_path": str(temp_config_dir / "pomodora.db")
+                    }
+                },
+                "local_cache_db_path": str(temp_config_dir / "pomodora.db")
+            }, f)
+        
+        # Create an isolated LocalSettingsManager that uses temp directory
+        test_settings_manager = LocalSettingsManager.__new__(LocalSettingsManager)
+        test_settings_manager.config_file = temp_settings_file
+        test_settings_manager.defaults = {
+            'theme_mode': 'light',
+            'sprint_duration': 25,
+            'break_duration': 5,
+            'alarm_volume': 0.7,
+            'sprint_alarm': 'gentle_chime',
+            'break_alarm': 'urgent_alert',
+            'auto_compact_mode': True,
+            'window_position': None,
+            'window_size': None,
+            'compact_mode': False,
+            'sync_strategy': 'local_only',
+            'coordination_backend': {
+                'type': 'local_file',
+                'local_file': {
+                    'shared_db_path': str(temp_config_dir / "pomodora.db")
+                }
+            },
+            'local_cache_db_path': str(temp_config_dir / "pomodora.db"),
+        }
         test_settings_manager._settings = test_settings_manager.defaults.copy()
         
-        # Patch the get_local_settings function everywhere it's used
+        # Patch ALL possible ways settings can be accessed
         with patch('tracking.local_settings.get_local_settings', return_value=test_settings_manager), \
-             patch('tracking.sync_config.get_local_settings', return_value=test_settings_manager):
+             patch('tracking.sync_config.get_local_settings', return_value=test_settings_manager), \
+             patch('tracking.local_settings.LocalSettingsManager', return_value=test_settings_manager):
             yield
-    finally:
-        # Clean up
-        if os.path.exists(temp_settings_path):
-            os.unlink(temp_settings_path)
 
 
 @pytest.fixture(scope="function")
