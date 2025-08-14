@@ -1261,7 +1261,7 @@ class ModernPomodoroWindow(QMainWindow):
                 info_print(f"Hibernation recovery: Successfully recovered {recovered_count} sprint(s)")
                 
                 # Update UI stats to reflect recovered sprints
-                if hasattr(self, 'update_stats'):
+                if hasattr(self, 'update_stats') and hasattr(self, 'stats_label'):
                     self.update_stats()
             else:
                 debug_print("Hibernation recovery: No sprints needed recovery")
