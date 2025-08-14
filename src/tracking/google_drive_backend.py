@@ -210,11 +210,32 @@ class GoogleDriveBackend(CoordinationBackend):
                 debug_print("No database found on Google Drive - nothing to download")
                 return True  # Not an error - first sync scenario
             
+            # Handle multiple database files - use most recent
+            if len(db_files) > 1:
+                error_print(f"⚠️  Found {len(db_files)} duplicate database files on Google Drive!")
+                for i, db_file in enumerate(db_files):
+                    info_print(f"  Database {i+1}: ID={db_file['id']}, modified={db_file.get('modifiedTime', 'unknown')}")
+                
+                # Sort by modification time (most recent first)
+                db_files.sort(key=lambda x: x.get('modifiedTime', ''), reverse=True)
+                selected_file = db_files[0]
+                info_print(f"✓ Selected most recent database: ID={selected_file['id']}, modified={selected_file.get('modifiedTime', 'unknown')}")
+                
+                # Clean up duplicate files (keep only the most recent)
+                for duplicate_file in db_files[1:]:
+                    try:
+                        info_print(f"🗑️  Deleting duplicate database file: ID={duplicate_file['id']}")
+                        self.drive_sync.service.files().delete(fileId=duplicate_file['id']).execute()
+                    except Exception as cleanup_error:
+                        error_print(f"Failed to delete duplicate file {duplicate_file['id']}: {cleanup_error}")
+            else:
+                selected_file = db_files[0]
+            
             local_path = Path(local_cache_path)
             local_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Download database file
-            file_id = db_files[0]['id']
+            file_id = selected_file['id']
             if not self.drive_sync.download_file(file_id, str(local_path)):
                 error_print("Failed to download database from Google Drive")
                 return False
@@ -323,11 +344,18 @@ class GoogleDriveBackend(CoordinationBackend):
             # Check database file status
             db_files = self.drive_sync.list_files_by_name("pomodora.db")
             if db_files:
-                db_file = db_files[0]
+                # Handle multiple database files - report most recent
+                if len(db_files) > 1:
+                    status["duplicate_db_count"] = len(db_files)
+                    # Sort by modification time (most recent first)
+                    db_files.sort(key=lambda x: x.get('modifiedTime', ''), reverse=True)
+                
+                db_file = db_files[0]  # Most recent file
                 status["remote_db"] = {
                     "exists": True,
                     "size_bytes": int(db_file.get('size', 0)),
-                    "modified_at": db_file['modifiedTime']
+                    "modified_at": db_file['modifiedTime'],
+                    "file_id": db_file['id']
                 }
             else:
                 status["remote_db"] = {"exists": False}
