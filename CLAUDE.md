@@ -223,6 +223,40 @@ The application is **production-ready** for deployment across multiple workstati
 - **Operation-Based Merging**: In-memory operation tracking replays local changes onto remote database
 - **Data Integrity**: All sprints from all workstations are preserved through intelligent conflict resolution
 
+### Synchronization Triggers
+
+The application synchronizes the local cache with shared storage through these 4 triggers only:
+
+#### 1. Startup Sync
+- **When**: Application starts (only for `leader_election` strategy)
+- **Implementation**: `UnifiedDatabaseManager._perform_initial_sync()`
+- **Timeout**: 120 seconds
+- **Purpose**: Download remote changes from other workstations before local use
+
+#### 2. Exit/Shutdown Sync  
+- **When**: Application exits or receives termination signals (SIGINT, SIGTERM)
+- **Implementation**: Signal handlers in `main.py` call `trigger_shutdown_sync()`
+- **Timeout**: 120 seconds (graceful), 10 seconds (wait for pending syncs)
+- **Purpose**: Upload local changes before shutdown to avoid data loss
+
+#### 3. Manual Sync
+- **When**: User selects "Force Sync" from File menu
+- **Implementation**: GUI calls `trigger_manual_sync()` → `force_sync_as_leader()`
+- **Timeout**: 300 seconds (5 minutes)
+- **Purpose**: User-initiated immediate sync for testing or before critical operations
+
+#### 4. Idle Sync
+- **When**: After 10 minutes of user inactivity
+- **Implementation**: `perform_idle_sync()` triggered by single-shot QTimer
+- **Timeout**: 60 seconds
+- **Purpose**: Sync pending changes during user breaks
+- **Reset**: Timer resets on any user activity (typing, clicking, timer operations)
+
+#### Operation Tracking
+Database operations (sprint completion, project creation, etc.) are **tracked** in the operation log for later synchronization but do **not** trigger immediate sync. All pending operations are synchronized during the 4 trigger points above.
+
+**Note**: For `local_only` strategy, no synchronization occurs as there is no shared storage.
+
 ### Thread Safety
 - **Qt Signal/Slot Architecture**: Timer callbacks use Qt signals to prevent threading issues
 - **Main Thread GUI Updates**: All UI operations happen on the main thread via signal connections

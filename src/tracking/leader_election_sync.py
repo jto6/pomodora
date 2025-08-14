@@ -396,39 +396,12 @@ class LeaderElectionSyncManager:
 
 class SyncScheduler:
     """
-    Scheduler for automatic background sync operations.
-    Handles periodic sync, idle sync, and shutdown sync triggers.
+    Scheduler for sync operations.
+    Handles idle sync, manual sync, and shutdown sync triggers.
     """
     
     def __init__(self, sync_manager: LeaderElectionSyncManager):
         self.sync_manager = sync_manager
-        self.auto_sync_enabled = True
-        self.sync_interval_minutes = 5
-        self.last_auto_sync: Optional[datetime] = None
-        
-    def should_auto_sync(self) -> bool:
-        """Check if automatic sync should be triggered"""
-        if not self.auto_sync_enabled:
-            return False
-            
-        if not self.sync_manager.is_sync_needed():
-            return False
-            
-        if self.last_auto_sync is None:
-            return True
-            
-        elapsed_minutes = (datetime.now() - self.last_auto_sync).total_seconds() / 60
-        return elapsed_minutes >= self.sync_interval_minutes
-    
-    def trigger_auto_sync(self) -> bool:
-        """Trigger automatic sync if needed"""
-        if self.should_auto_sync():
-            debug_print("Triggering automatic sync")
-            result = self.sync_manager.sync_database(timeout_seconds=30)
-            if result:
-                self.last_auto_sync = datetime.now()
-            return result
-        return True
     
     def trigger_idle_sync(self) -> bool:
         """Trigger sync when application becomes idle"""

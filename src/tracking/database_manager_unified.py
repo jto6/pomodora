@@ -143,7 +143,6 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
                 self.backup_manager = DatabaseBackupManager(str(shared_path), str(backup_base_dir))
             else:
                 # Google Drive backend - use dedicated google_drive_backups directory
-                from pathlib import Path
                 config_dir = Path.home() / '.config' / 'pomodora'
                 backup_base_dir = config_dir / 'google_drive_backups'
                 backup_base_dir.mkdir(parents=True, exist_ok=True)
@@ -291,12 +290,6 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         
         return self.sync_scheduler.trigger_shutdown_sync()
     
-    def trigger_auto_sync(self) -> bool:
-        """Trigger automatic sync based on time interval"""
-        if not self.sync_manager:
-            return True  # Not an error for local-only mode
-        
-        return self.sync_scheduler.trigger_auto_sync()
     
     def get_sync_status(self) -> Dict[str, Any]:
         """Get comprehensive sync status"""

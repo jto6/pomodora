@@ -238,16 +238,16 @@ class UnifiedSyncSimulator:
                 self.errors.append(f"Manual sync error instance {instance_id}: {e}")
         
         def timer_sync(instance_id: int):
-            """Simulate automatic timer-triggered sync"""
+            """Simulate idle sync (replaces removed auto sync)"""
             try:
                 time.sleep(0.15 * instance_id)  # Different timing than manual
-                sync_results['timer_sync'].append(f"Instance {instance_id} timer sync started")
+                sync_results['timer_sync'].append(f"Instance {instance_id} idle sync started")
                 
-                # Use unified database manager sync
-                success = self.instances[instance_id].trigger_auto_sync()
+                # Use idle sync instead of removed auto sync
+                success = self.instances[instance_id].trigger_idle_sync()
                 
                 status = "completed" if success else "failed"
-                sync_results['timer_sync'].append(f"Instance {instance_id} timer sync {status}")
+                sync_results['timer_sync'].append(f"Instance {instance_id} idle sync {status}")
             except Exception as e:
                 self.errors.append(f"Timer sync error instance {instance_id}: {e}")
         
