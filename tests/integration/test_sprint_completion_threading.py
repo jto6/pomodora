@@ -34,12 +34,9 @@ class TestSprintCompletionThreadingIntegration:
         self.temp_dir = tempfile.mkdtemp()
         self.temp_db_path = os.path.join(self.temp_dir, 'test_pomodora.db')
         
-        # Set up local-only database configuration
-        os.environ['POMODORA_SYNC_STRATEGY'] = 'local_only'
-        os.environ['POMODORA_LOCAL_DB_PATH'] = self.temp_db_path
-        
-        # Create database manager
-        self.db_manager = UnifiedDatabaseManager()
+        # Create database manager with explicit test database path
+        # This ensures we don't use production configuration
+        self.db_manager = UnifiedDatabaseManager(db_path=self.temp_db_path)
         
         # Create test data
         self.setup_test_data()
