@@ -1281,9 +1281,14 @@ class ModernPomodoroWindow(QMainWindow):
                     # Add to recovered list for operation tracking
                     recovered_sprints.append(sprint)
                     
+                    start_date = sprint.start_time.strftime('%Y-%m-%d')
+                    end_date = sprint.end_time.strftime('%Y-%m-%d')
                     info_print(f"Hibernation recovery: Auto-completed sprint '{sprint.task_description}' "
-                             f"(started {sprint.start_time.strftime('%H:%M')}, "
+                             f"(started {sprint.start_time.strftime('%Y-%m-%d %H:%M')}, "
+                             f"completed {sprint.end_time.strftime('%Y-%m-%d %H:%M')}, "
                              f"elapsed {elapsed_time.total_seconds()/60:.1f} min)")
+                    if start_date != end_date:
+                        info_print(f"Note: Sprint started on {start_date} so it will appear in {start_date}'s statistics, not today's")
                     recovered_count += 1
                 else:
                     # Sprint is still within its planned duration - could be a legitimate pause
