@@ -19,26 +19,36 @@ def set_verbose(enabled: bool):
     """Set verbose mode (for backward compatibility)"""
     set_verbose_level(1 if enabled else 0)
 
+def _get_timestamp():
+    """Get current timestamp for logging"""
+    from datetime import datetime
+    return datetime.now().strftime("%H:%M:%S.%f")[:-3]  # Format: HH:MM:SS.mmm
+
 def error_print(*args, **kwargs):
     """Always print errors to stderr regardless of verbose level"""
     import sys
-    print(*args, file=sys.stderr, **kwargs)
+    timestamp = _get_timestamp()
+    print(f"[{timestamp}]", *args, file=sys.stderr, **kwargs)
 
 def info_print(*args, **kwargs):
     """Print informational messages at verbose level 1+"""
     if VERBOSE_LEVEL >= 1:
-        print(*args, **kwargs)
+        timestamp = _get_timestamp()
+        print(f"[{timestamp}]", *args, **kwargs)
 
 def debug_print(*args, **kwargs):
     """Print debug messages at verbose level 2+"""
     if VERBOSE_LEVEL >= 2:
-        print("[DEBUG]", *args, **kwargs)
+        timestamp = _get_timestamp()
+        print(f"[{timestamp}] [DEBUG]", *args, **kwargs)
 
 def trace_print(*args, **kwargs):
     """Print trace messages at verbose level 3+"""
     if VERBOSE_LEVEL >= 3:
-        print("[TRACE]", *args, **kwargs)
+        timestamp = _get_timestamp()
+        print(f"[{timestamp}] [TRACE]", *args, **kwargs)
 
 def verbose_print(*args, **kwargs):
     """Legacy function - always prints for backward compatibility"""
-    print(*args, **kwargs)
+    timestamp = _get_timestamp()
+    print(f"[{timestamp}]", *args, **kwargs)
