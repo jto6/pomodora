@@ -228,24 +228,26 @@ class LeaderElectionSyncManager:
                     error_print("Failed to download database")
                     return False
                 
+                # Get pending operations before processing
+                pending_operations = self.operation_tracker.get_pending_operations()
+                
                 # Validate and ensure downloaded database has proper schema
                 if not self._ensure_database_schema(temp_db_path):
-                    error_print("Downloaded database lacks proper schema - cannot proceed")
-                    return False
+                    error_print("Downloaded database lacks proper schema - will use local database as authoritative source")
+                    # Use local database as the source of truth when remote is corrupted
+                    merged_db_path = str(self.local_cache_db)
+                    info_print("Using local database as authoritative source due to remote corruption")
+                else:
+                    # Step 4: Merge local changes with downloaded database
+                    self._report_progress("Merging local changes", 0.5)
+                    merged_db_path = self._merge_databases(temp_db_path)
                 
-                # Step 4: Merge local changes with downloaded database
-                self._report_progress("Merging local changes", 0.5)
+                    if not merged_db_path:
+                        error_print("Failed to merge databases")
+                        return False
                 
-                # Get pending operations before merging
-                pending_operations = self.operation_tracker.get_pending_operations()
-                merged_db_path = self._merge_databases(temp_db_path)
-                
-                if not merged_db_path:
-                    error_print("Failed to merge databases")
-                    return False
-                
-                # Step 5: Upload merged database if there were local changes
-                if pending_operations:
+                # Step 5: Upload merged database if there were local changes OR if remote was corrupted
+                if pending_operations or not self._ensure_database_schema(temp_db_path):
                     # Database was merged with local changes - upload required
                     self._report_progress("Uploading merged database", 0.7)
                     if not self.coordination.upload_database(merged_db_path):
