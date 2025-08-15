@@ -1001,7 +1001,22 @@ class ModernPomodoroWindow(QMainWindow):
 
     def emit_sprint_complete(self):
         """Thread-safe method called from background timer thread"""
-        self.sprint_completed.emit()
+        # Capture critical sprint data immediately to avoid race conditions
+        sprint_data = {
+            'project_id': self.current_project_id,
+            'task_category_id': self.current_task_category_id, 
+            'task_description': self.current_task_description,
+            'start_time': self.sprint_start_time
+        }
+        
+        # Only emit signal if we have valid sprint data
+        if (sprint_data['project_id'] and sprint_data['task_category_id'] and 
+            sprint_data['task_description'] and sprint_data['start_time']):
+            # Store the captured data temporarily
+            self._pending_sprint_data = sprint_data
+            self.sprint_completed.emit()
+        else:
+            debug_print(f"Sprint completion skipped - invalid data: {sprint_data}")
 
     def handle_sprint_complete(self):
         """Main thread handler for sprint completion"""
@@ -1009,17 +1024,18 @@ class ModernPomodoroWindow(QMainWindow):
 
         # Auto-save sprint to database when timer completes
         # This ensures sprints are saved even after hibernation resume
-        if (hasattr(self, 'current_project_id') and self.current_project_id and
-            hasattr(self, 'current_task_category_id') and self.current_task_category_id and
-            hasattr(self, 'current_task_description') and self.current_task_description and
-            hasattr(self, 'sprint_start_time') and self.sprint_start_time):
-            
+        # Use captured sprint data to avoid race conditions
+        if hasattr(self, '_pending_sprint_data') and self._pending_sprint_data:
             try:
-                debug_print("Auto-saving sprint on timer completion")
-                self._save_current_sprint()
+                debug_print("Auto-saving sprint on timer completion using captured data")
+                self._save_sprint_with_data(self._pending_sprint_data)
                 info_print("✓ Sprint auto-saved on timer completion")
+                # Clear the pending data
+                delattr(self, '_pending_sprint_data')
             except Exception as e:
                 error_print(f"Failed to auto-save sprint on timer completion: {e}")
+        else:
+            error_print("No pending sprint data available for auto-save")
 
         # Get alarm settings
         from tracking.local_settings import get_local_settings
@@ -1309,7 +1325,7 @@ class ModernPomodoroWindow(QMainWindow):
                         'sprints', 
                         {
                             'id': sprint.id, 
-                            'end_time': sprint.end_time.isoformat(),
+                            'end_time': sprint.end_time.isoformat() if sprint.end_time else None,
                             'duration_minutes': sprint.duration_minutes,
                             'completed': True,
                             'interrupted': False
@@ -1391,6 +1407,54 @@ class ModernPomodoroWindow(QMainWindow):
         # Update statistics
         if hasattr(self, 'update_stats'):
             self.update_stats()
+
+    def _save_sprint_with_data(self, sprint_data):
+        """
+        Save sprint using captured data to avoid race conditions.
+        
+        Args:
+            sprint_data: Dict with 'project_id', 'task_category_id', 'task_description', 'start_time'
+        """
+        from datetime import datetime
+        from tracking.models import Sprint
+        
+        start_time = sprint_data['start_time']
+        end_time = datetime.now()
+        
+        if start_time is None:
+            error_print("Sprint start time is None in captured data, cannot save sprint")
+            return
+            
+        actual_duration = (end_time - start_time).total_seconds()
+        debug_print(f"Saving sprint with captured data: start={start_time}, duration={actual_duration}s")
+
+        # Ensure task description is not None
+        task_desc = sprint_data['task_description'] or "Pomodoro Sprint"
+        debug_print(f"Task description for sprint save: '{task_desc}'")
+
+        sprint = Sprint(
+            project_id=sprint_data['project_id'],
+            task_category_id=sprint_data['task_category_id'],
+            task_description=task_desc,
+            start_time=start_time,
+            end_time=end_time,
+            completed=True,
+            interrupted=False,
+            duration_minutes=int(actual_duration / 60),
+            planned_duration=int(self.pomodoro_timer.sprint_duration / 60)
+        )
+        debug_print(f"Created sprint object with captured data: {sprint.task_description}, duration: {actual_duration}s")
+
+        # Save to database
+        debug_print("Calling db_manager.add_sprint()...")
+        self.db_manager.add_sprint(sprint)
+        debug_print("Sprint saved to database successfully with captured data")
+
+        # Update statistics
+        if hasattr(self, 'update_stats'):
+            self.update_stats()
+
+        debug_print("Sprint save with captured data completed successfully")
 
     def reset_ui(self):
         """Reset UI to initial state"""
