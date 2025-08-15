@@ -346,7 +346,18 @@ class GoogleDriveSync:
             files = results.get('files', [])
 
             if files:
-                # Update existing file
+                # If multiple files exist with the same name, delete all but the first and update the first
+                if len(files) > 1:
+                    error_print(f"⚠️  DUPLICATE CLEANUP: Found {len(files)} files named '{filename}' during upload!")
+                    for i, duplicate_file in enumerate(files[1:], 1):  # Delete all but the first
+                        try:
+                            self.service.files().delete(fileId=duplicate_file['id']).execute()
+                            error_print(f"🗑️  DUPLICATE CLEANUP: Deleted duplicate #{i}: {duplicate_file['id']}")
+                        except Exception as delete_error:
+                            error_print(f"❌ DUPLICATE CLEANUP: Failed to delete duplicate {duplicate_file['id']}: {delete_error}")
+                    error_print(f"✅ DUPLICATE CLEANUP: Cleaned up {len(files) - 1} duplicate files, keeping {files[0]['id']}")
+                
+                # Update the remaining file (files[0])
                 file_id = files[0]['id']
                 self.service.files().update(
                     fileId=file_id,

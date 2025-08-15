@@ -154,43 +154,32 @@ class GoogleDriveBackend(CoordinationBackend):
     
     def upload_database(self, local_db_path: str, backup_info: Optional[Dict[str, Any]] = None) -> bool:
         """Upload database to Google Drive"""
+        import time  # Import at function level to avoid scoping issues
         try:
             local_path = Path(local_db_path)
             if not local_path.exists():
                 error_print(f"Local database not found: {local_path}")
                 return False
             
-            # Use timestamped filename to avoid conflicts during upload
-            timestamp = int(time.time())
-            temp_filename = f"pomodora_sync_{timestamp}.db"
             final_filename = "pomodora.db"
             
-            # Upload to temporary name first
-            if not self.drive_sync.upload_file(str(local_path), temp_filename):
+            # Clean up any orphaned temporary sync files from failed previous uploads
+            # (These can accumulate from interrupted uploads and cause confusion)
+            temp_pattern_files = self.drive_sync.list_files_by_pattern("pomodora_sync_*.db")
+            if temp_pattern_files:
+                error_print(f"⚠️  ORPHAN CLEANUP: Found {len(temp_pattern_files)} abandoned sync files from failed uploads!")
+                for temp_file in temp_pattern_files:
+                    try:
+                        error_print(f"🗑️  ORPHAN CLEANUP: Deleting '{temp_file['name']}' ({temp_file['id']})")
+                        self.drive_sync.service.files().delete(fileId=temp_file['id']).execute()
+                    except Exception as delete_error:
+                        error_print(f"❌ ORPHAN CLEANUP: Failed to delete {temp_file['id']}: {delete_error}")
+                error_print(f"✅ ORPHAN CLEANUP: Cleaned up {len(temp_pattern_files)} abandoned sync files")
+            
+            # Upload directly to final filename - let upload_file() handle update vs create logic
+            if not self.drive_sync.upload_file(str(local_path), final_filename):
                 error_print("Failed to upload database to Google Drive")
                 return False
-            
-            # Note: Database backups are handled locally, not in Google Drive
-            
-            # Clean up any existing files with the final name (to avoid duplicates)
-            existing_final_files = self.drive_sync.list_files_by_name(final_filename)
-            if len(existing_final_files) > 1:
-                debug_print(f"Found {len(existing_final_files)} existing files named '{final_filename}', cleaning up duplicates")
-                # Keep only the most recent one, delete the rest
-                existing_final_files.sort(key=lambda f: f.get('modifiedTime', ''), reverse=True)
-                for file_to_delete in existing_final_files[1:]:  # Delete all but the first (most recent)
-                    debug_print(f"Deleting duplicate file: {file_to_delete['id']}")
-                    self.drive_sync.service.files().delete(fileId=file_to_delete['id']).execute()
-            
-            # Rename temporary file to final name (atomic operation)
-            temp_files = self.drive_sync.list_files_by_name(temp_filename)
-            if temp_files:
-                success = self.drive_sync.rename_file(temp_files[0]['id'], final_filename)
-                if not success:
-                    error_print("Failed to finalize database upload")
-                    # Clean up temp file
-                    self.drive_sync.delete_file_by_name(temp_filename)
-                    return False
             
             file_size = local_path.stat().st_size
             info_print(f"Database uploaded successfully to Google Drive ({file_size} bytes)")
