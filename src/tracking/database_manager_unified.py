@@ -481,15 +481,9 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
                    start_time=None, planned_duration=None):
         """Add a sprint - supports both Sprint objects and individual parameters"""
         if isinstance(sprint_or_project_id, Sprint) or hasattr(sprint_or_project_id, 'project_id'):
-            # Sprint object passed
+            # Sprint object passed - save it directly without losing data
             sprint = sprint_or_project_id
-            return self._add_sprint_from_params(
-                sprint.project_id,
-                sprint.task_category_id,
-                sprint.task_description,
-                sprint.start_time,
-                sprint.planned_duration
-            )
+            return self._add_sprint_object(sprint)
         elif isinstance(sprint_or_project_id, dict):
             # Dictionary passed
             return self._add_sprint_from_params(
@@ -508,6 +502,42 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
                 start_time,
                 planned_duration
             )
+    
+    def _add_sprint_object(self, sprint: Sprint) -> Optional[Sprint]:
+        """Add a complete Sprint object to database without losing any fields"""
+        session = self.get_session()
+        try:
+            debug_print(f"Adding sprint object: {sprint.task_description}")
+            debug_print(f"Sprint fields: start_time={sprint.start_time}, end_time={sprint.end_time}, completed={sprint.completed}, duration_minutes={sprint.duration_minutes}")
+            
+            # Add the complete sprint object to session
+            session.add(sprint)
+            session.commit()
+            session.refresh(sprint)
+            
+            # Track operation for sync - include ALL fields
+            self.operation_tracker.track_operation('insert', 'sprints', {
+                'id': sprint.id,
+                'project_id': sprint.project_id,
+                'task_category_id': sprint.task_category_id,
+                'task_description': sprint.task_description,
+                'start_time': sprint.start_time.isoformat() if sprint.start_time else None,
+                'end_time': sprint.end_time.isoformat() if sprint.end_time else None,
+                'duration_minutes': sprint.duration_minutes,
+                'planned_duration': sprint.planned_duration,
+                'completed': sprint.completed,
+                'interrupted': sprint.interrupted
+            })
+            
+            debug_print(f"Added sprint object successfully: {sprint.task_description}")
+            return sprint
+            
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to add sprint object: {e}")
+            return None
+        finally:
+            session.close()
     
     def _add_sprint_from_params(self, project_id: int, task_category_id: int, task_description: str, 
                                start_time: datetime, planned_duration: int) -> Optional[Sprint]:
