@@ -6,6 +6,7 @@ Provides unified sync logic that works with both local file and Google Drive coo
 import os
 import time
 import tempfile
+import json
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 from datetime import datetime
@@ -37,6 +38,9 @@ class LeaderElectionSyncManager:
         self.last_sync_time: Optional[datetime] = None
         self.sync_count = 0
         self.error_count = 0
+        
+        # Sync metadata persistence
+        self.sync_metadata_file = Path(local_cache_db_path).parent / "last_sync_metadata.json"
         
         debug_print(f"LeaderElectionSyncManager initialized:")
         debug_print(f"  Backend: {type(coordination_backend).__name__}")
@@ -216,7 +220,19 @@ class LeaderElectionSyncManager:
     def _perform_leader_sync(self) -> bool:
         """Perform the actual sync operation as the elected leader"""
         try:
-            # Step 3: Download latest database from shared location
+            # Check if download is needed using change detection
+            last_metadata = self._load_last_sync_metadata()
+            has_changed, current_metadata = self.coordination.has_database_changed(last_metadata)
+            
+            # Get pending operations to determine if we need to upload
+            pending_operations = self.operation_tracker.get_pending_operations()
+            
+            if not has_changed and not pending_operations:
+                debug_print("No remote changes and no local operations - skipping sync")
+                self._report_progress("No changes detected - sync complete", 1.0)
+                return True
+            
+            # Step 3: Download latest database from shared location (if changed or we have local ops)
             self._report_progress("Downloading latest database", 0.3)
             
             # Create temporary file for downloaded database
@@ -280,6 +296,10 @@ class LeaderElectionSyncManager:
                 
                 self.last_sync_time = datetime.now()
                 self.sync_count += 1
+                
+                # Save current metadata for future change detection
+                if current_metadata:
+                    self._save_last_sync_metadata(current_metadata)
                 
                 info_print(f"Leader sync completed successfully")
                 return True
@@ -377,6 +397,26 @@ class LeaderElectionSyncManager:
         }
         
         return status
+    
+    def _load_last_sync_metadata(self) -> Optional[Dict[str, Any]]:
+        """Load metadata from last sync operation"""
+        try:
+            if self.sync_metadata_file.exists():
+                with open(self.sync_metadata_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            debug_print(f"Error loading sync metadata: {e}")
+        return None
+    
+    def _save_last_sync_metadata(self, metadata: Dict[str, Any]) -> None:
+        """Save metadata from sync operation"""
+        try:
+            self.sync_metadata_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.sync_metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            debug_print(f"Saved sync metadata: {metadata}")
+        except Exception as e:
+            debug_print(f"Error saving sync metadata: {e}")
     
     def is_sync_needed(self) -> bool:
         """Check if sync is needed based on pending operations"""

@@ -80,6 +80,22 @@ class CoordinationBackend(ABC):
         pass
     
     @abstractmethod
+    def has_database_changed(self, last_sync_metadata: Optional[Dict[str, Any]] = None) -> tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        Check if remote database has changed since last sync.
+        Conservative approach - returns True if uncertain.
+        
+        Args:
+            last_sync_metadata: Metadata from previous sync (modTime, size, etc.)
+        
+        Returns:
+            tuple: (has_changed: bool, current_metadata: dict)
+            - has_changed: True if database changed OR if uncertain
+            - current_metadata: Current file metadata for future comparisons
+        """
+        pass
+    
+    @abstractmethod
     def is_available(self) -> bool:
         """
         Check if coordination backend is available and functional.

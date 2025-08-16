@@ -354,6 +354,51 @@ class GoogleDriveBackend(CoordinationBackend):
         
         return status
     
+    def has_database_changed(self, last_sync_metadata: Optional[Dict[str, Any]] = None) -> tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        Check if remote database has changed since last sync.
+        Conservative approach - returns True if uncertain.
+        """
+        try:
+            # Find database files
+            db_files = self.drive_sync.list_files(
+                folder_id=self.folder_id,
+                name_pattern="*.db"
+            )
+            
+            if not db_files:
+                debug_print("No remote database found - considering as changed")
+                return True, None  # Conservative: no file = changed
+            
+            # Handle multiple files - use most recent
+            if len(db_files) > 1:
+                db_files.sort(key=lambda x: x.get('modifiedTime', ''), reverse=True)
+            
+            current_file = db_files[0]
+            current_metadata = {
+                "modified_time": current_file['modifiedTime'],
+                "size": int(current_file.get('size', 0)),
+                "file_id": current_file['id']
+            }
+            
+            # Conservative: download if no previous metadata
+            if not last_sync_metadata:
+                debug_print("No previous sync metadata - considering as changed")
+                return True, current_metadata
+            
+            # Compare metadata
+            if (current_metadata["modified_time"] != last_sync_metadata.get("modified_time") or
+                current_metadata["size"] != last_sync_metadata.get("size")):
+                debug_print(f"Remote database changed: modTime={current_metadata['modified_time']}, size={current_metadata['size']}")
+                return True, current_metadata
+            
+            debug_print("Remote database unchanged since last sync")
+            return False, current_metadata
+            
+        except Exception as e:
+            debug_print(f"Error checking remote database changes: {e}")
+            return True, None  # Conservative: download on any error
+    
     def is_available(self) -> bool:
         """Check if Google Drive backend is available"""
         try:

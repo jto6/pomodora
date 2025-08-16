@@ -334,6 +334,40 @@ class LocalFileBackend(CoordinationBackend):
         
         return status
     
+    def has_database_changed(self, last_sync_metadata: Optional[Dict[str, Any]] = None) -> tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        Check if shared database file has changed since last sync.
+        Conservative approach - returns True if uncertain.
+        """
+        try:
+            if not self.shared_db_path.exists():
+                debug_print("No shared database file found - considering as changed")
+                return True, None  # Conservative: no file = changed
+            
+            stat = self.shared_db_path.stat()
+            current_metadata = {
+                "modified_time": stat.st_mtime,
+                "size": stat.st_size
+            }
+            
+            # Conservative: download if no previous metadata
+            if not last_sync_metadata:
+                debug_print("No previous sync metadata - considering as changed")
+                return True, current_metadata
+            
+            # Compare filesystem metadata
+            if (current_metadata["modified_time"] != last_sync_metadata.get("modified_time") or
+                current_metadata["size"] != last_sync_metadata.get("size")):
+                debug_print(f"Shared database changed: modTime={current_metadata['modified_time']}, size={current_metadata['size']}")
+                return True, current_metadata
+            
+            debug_print("Shared database unchanged since last sync")
+            return False, current_metadata
+            
+        except Exception as e:
+            debug_print(f"Error checking shared database changes: {e}")
+            return True, None  # Conservative: download on any error
+    
     def is_available(self) -> bool:
         """Check if local file backend is available"""
         try:
