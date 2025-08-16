@@ -30,6 +30,9 @@ class TestSyncCorruptionRecovery:
         mock_coordination = Mock(spec=GoogleDriveBackend)
         mock_operation_tracker = Mock(spec=OperationTracker)
         
+        # Mock the new change detection method
+        mock_coordination.has_database_changed.return_value = (True, {"modified_time": "2025-01-01T12:00:00Z", "size": 1000})
+        
         # Create sync manager
         with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as temp_file:
             local_cache_path = temp_file.name
@@ -108,6 +111,9 @@ class TestSyncCorruptionRecovery:
         mock_coordination = Mock(spec=GoogleDriveBackend)
         mock_operation_tracker = Mock(spec=OperationTracker)
         
+        # Mock the new change detection method
+        mock_coordination.has_database_changed.return_value = (True, {"modified_time": "2025-01-01T12:00:00Z", "size": 1000})
+        
         # Create sync manager
         with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as temp_file:
             local_cache_path = temp_file.name
@@ -162,6 +168,9 @@ class TestSyncCorruptionRecovery:
         # Mock components
         mock_coordination = Mock(spec=GoogleDriveBackend)
         mock_operation_tracker = Mock(spec=OperationTracker)
+        
+        # Mock the new change detection method
+        mock_coordination.has_database_changed.return_value = (True, {"modified_time": "2025-01-01T12:00:00Z", "size": 1000})
         
         with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as temp_file:
             local_cache_path = temp_file.name
@@ -273,6 +282,9 @@ class TestSyncCorruptionRecovery:
         # Mock components
         mock_coordination = Mock(spec=GoogleDriveBackend)
         mock_operation_tracker = Mock(spec=OperationTracker)
+        
+        # Mock the new change detection method
+        mock_coordination.has_database_changed.return_value = (True, {"modified_time": "2025-01-01T12:00:00Z", "size": 1000})
         
         with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as temp_file:
             local_cache_path = temp_file.name
