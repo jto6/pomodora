@@ -66,11 +66,20 @@ class ModernPomodoroWindow(QMainWindow):
         self.date_timer.start(3600000)  # Check every hour
         self.current_date = None  # Track current date for comparison
 
-        # Idle sync timer - sync pending changes after 10 minutes of inactivity
-        self.idle_sync_timer = QTimer()
-        self.idle_sync_timer.setSingleShot(True)  # Only trigger once per idle period
-        self.idle_sync_timer.timeout.connect(self.perform_idle_sync)
-        self.idle_sync_timeout = 10 * 60 * 1000  # 10 minutes in milliseconds
+        # Periodic sync timer - sync 1 hour after last sync when idle
+        self.periodic_sync_timer = QTimer()
+        self.periodic_sync_timer.setSingleShot(True)  # Single-shot timer, restarts after each sync
+        self.periodic_sync_timer.timeout.connect(self.request_periodic_sync)
+        self.periodic_sync_interval = 60 * 60 * 1000  # 1 hour in milliseconds
+        
+        # Idle detection timer - waits for user inactivity before executing sync
+        self.idle_timer = QTimer()
+        self.idle_timer.setSingleShot(True)  # Only trigger once per idle period
+        self.idle_timer.timeout.connect(self.on_idle_timeout)
+        self.idle_timeout = 10 * 60 * 1000  # 10 minutes in milliseconds
+        
+        # Sync state
+        self.sync_requested = False  # True when periodic sync is waiting for idle period
 
         # Sprint tracking
         self.current_project_id = None
@@ -122,8 +131,8 @@ class ModernPomodoroWindow(QMainWindow):
         self.update_stats()
         debug_print(f"Stats label text after update: '{self.stats_label.text()}'")
 
-        # Start idle sync timer
-        self.reset_idle_sync_timer()
+        # Start periodic sync system
+        self.start_periodic_sync_system()
 
     def load_app_icon(self):
         """Load the application icon from logo.svg"""
@@ -159,13 +168,13 @@ class ModernPomodoroWindow(QMainWindow):
         if self.compact_mode:
             self.toggle_compact_mode()
         
-        # Reset idle sync timer on user activity
-        self.reset_idle_sync_timer()
+        # Reset idle timer on user activity
+        self.on_user_activity()
         super().mousePressEvent(event)
 
     def keyPressEvent(self, event):
         """Handle key presses - reset idle timer on any key activity"""
-        self.reset_idle_sync_timer()
+        self.on_user_activity()
         super().keyPressEvent(event)
 
     def closeEvent(self, event):
@@ -183,10 +192,13 @@ class ModernPomodoroWindow(QMainWindow):
                 self.date_timer.stop()
                 info_print("Date timer stopped")
 
-            # Stop idle sync timer
-            if hasattr(self, 'idle_sync_timer') and self.idle_sync_timer:
-                self.idle_sync_timer.stop()
-                info_print("Idle sync timer stopped")
+            # Stop periodic sync timers
+            if hasattr(self, 'periodic_sync_timer') and self.periodic_sync_timer:
+                self.periodic_sync_timer.stop()
+                info_print("Periodic sync timer stopped")
+            if hasattr(self, 'idle_timer') and self.idle_timer:
+                self.idle_timer.stop()
+                info_print("Idle timer stopped")
 
             # Stop pomodoro timer
             if hasattr(self, 'pomodoro_timer') and self.pomodoro_timer:
@@ -1222,25 +1234,69 @@ class ModernPomodoroWindow(QMainWindow):
             self.update_stats()
             info_print(f"Stats refreshed for new day: {today}")
 
-    def reset_idle_sync_timer(self):
-        """Reset idle sync timer - call this whenever user activity is detected"""
-        if hasattr(self, 'idle_sync_timer'):
-            self.idle_sync_timer.start(self.idle_sync_timeout)
-
-    def perform_idle_sync(self):
-        """Perform sync if there are pending changes after idle timeout"""
-        debug_print("Idle timeout reached - checking for pending changes to sync")
+    def start_periodic_sync_system(self):
+        """Initialize the periodic sync system after startup sync"""
+        debug_print("Starting periodic sync system")
+        # Start 1-hour timer after startup sync completes
+        self.on_sync_completed()
+        # Start idle detection
+        self.on_user_activity()
+    
+    def on_user_activity(self):
+        """Called whenever user activity is detected"""
+        # Reset idle detection timer
+        if hasattr(self, 'idle_timer'):
+            self.idle_timer.start(self.idle_timeout)
+    
+    def request_periodic_sync(self):
+        """Called by periodic timer - request sync when user becomes idle"""
+        debug_print("Periodic sync requested - waiting for idle period")
+        if self._is_currently_idle():
+            self._perform_periodic_sync()
+        else:
+            debug_print("User active - setting sync_requested flag")
+            self.sync_requested = True
+    
+    def on_idle_timeout(self):
+        """Called after idle timeout - perform sync if requested"""
+        debug_print("Idle timeout reached")
+        if self.sync_requested:
+            debug_print("Sync was requested - performing periodic sync")
+            self._perform_periodic_sync()
+            self.sync_requested = False
+        else:
+            debug_print("No sync requested during idle period")
+    
+    def _is_currently_idle(self) -> bool:
+        """Check if user is currently idle (timer not running)"""
+        return not self.idle_timer.isActive()
+    
+    def _perform_periodic_sync(self):
+        """Perform the actual periodic sync operation"""
+        debug_print("Performing periodic sync")
         try:
             if hasattr(self, 'db_manager') and self.db_manager:
                 success = self.db_manager.sync_if_changes_pending()
                 if success:
-                    debug_print("Idle sync completed successfully")
+                    debug_print("Periodic sync completed successfully")
                     # Update stats in case remote changes were downloaded
                     self.update_stats()
+                    # Restart periodic timer for next sync
+                    self.on_sync_completed()
                 else:
-                    debug_print("Idle sync failed or was skipped")
+                    debug_print("Periodic sync failed or was skipped")
+                    # Still restart timer even if sync failed
+                    self.on_sync_completed()
         except Exception as e:
-            error_print(f"Error during idle sync: {e}")
+            error_print(f"Error during periodic sync: {e}")
+            # Restart timer even on error
+            self.on_sync_completed()
+    
+    def on_sync_completed(self):
+        """Called after any sync operation completes - restart periodic timer"""
+        debug_print("Sync completed - restarting 1-hour periodic timer")
+        if hasattr(self, 'periodic_sync_timer'):
+            self.periodic_sync_timer.start(self.periodic_sync_interval)
 
     def _recover_hibernated_sprints(self):
         """
@@ -1668,6 +1724,9 @@ class ModernPomodoroWindow(QMainWindow):
             if success:
                 # Update stats to reflect any new sprints downloaded from remote
                 self.update_stats()
+                
+                # Restart periodic timer after manual sync
+                self.on_sync_completed()
                 
                 self.show_sync_dialog(
                     "Sync Complete", 
