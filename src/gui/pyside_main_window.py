@@ -208,8 +208,8 @@ class ModernPomodoroWindow(QMainWindow):
             # Close database connections properly
             if hasattr(self, 'db_manager') and self.db_manager:
                 # Check for pending changes and sync before exit
-                if hasattr(self.db_manager, 'has_pending_changes') and hasattr(self.db_manager, 'sync_if_changes_pending'):
-                    if self.db_manager.has_pending_changes():
+                if hasattr(self.db_manager, 'has_local_changes') and hasattr(self.db_manager, 'sync_if_changes_pending'):
+                    if self.db_manager.has_local_changes():
                         info_print("Syncing pending changes before exit...")
                         try:
                             # Show brief progress dialog for exit sync

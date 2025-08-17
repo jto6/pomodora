@@ -479,7 +479,7 @@ class SettingsDialog(QDialog):
                 db_manager = self.parent_window.db_manager
                 
                 # Check if there are pending changes
-                if hasattr(db_manager, 'has_pending_changes') and db_manager.has_pending_changes():
+                if hasattr(db_manager, 'has_local_changes') and db_manager.has_local_changes():
                     debug_print("Syncing pending changes before database configuration change...")
                     
                     # Show progress dialog for the sync

@@ -444,23 +444,31 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         finally:
             session.close()
     
-    def has_pending_changes(self):
+    def has_local_changes(self):
         """Check if there are local changes that need to be synced"""
+        if not self.sync_manager:
+            return False
+        # Check for local pending operations
+        pending_ops = self.operation_tracker.get_pending_operations()
+        return len(pending_ops) > 0
+    
+    def has_remote_changes(self):
+        """Check if remote database has changed since last sync"""
         if not self.sync_manager:
             return False
         return self.sync_manager.is_sync_needed()
     
     def sync_if_changes_pending(self):
-        """Sync if there are pending local changes OR remote database has changed"""
+        """Sync if there are local changes OR remote database has changed"""
         if not self.sync_manager:
             debug_print("No sync manager - skipping sync")
             return True
         
-        # Check for local pending changes
-        has_local_changes = self.has_pending_changes()
+        # Check for local changes (pending operations)
+        has_local_changes = self.has_local_changes()
         
-        # Check if remote database has changed (with efficient change detection)
-        has_remote_changes = self.sync_manager.is_sync_needed()
+        # Check for remote changes (database modified by other workstations)
+        has_remote_changes = self.has_remote_changes()
         
         if not has_local_changes and not has_remote_changes:
             debug_print("No local or remote changes - skipping sync")
