@@ -43,7 +43,7 @@ class TestGoogleDriveChangeDetection:
     def test_no_remote_database_detected_as_changed(self, mock_drive_backend):
         """Test that missing remote database is detected as changed"""
         # Mock no database files found
-        mock_drive_backend.drive_sync.list_files.return_value = []
+        mock_drive_backend.drive_sync.list_files_by_name.return_value = []
         
         has_changed, metadata = mock_drive_backend.has_database_changed()
         
@@ -58,7 +58,7 @@ class TestGoogleDriveChangeDetection:
             'modifiedTime': '2025-01-01T12:00:00Z',
             'size': '1000'
         }
-        mock_drive_backend.drive_sync.list_files.return_value = [mock_file]
+        mock_drive_backend.drive_sync.list_files_by_name.return_value = [mock_file]
         
         has_changed, metadata = mock_drive_backend.has_database_changed(None)
         
@@ -77,7 +77,7 @@ class TestGoogleDriveChangeDetection:
             'modifiedTime': '2025-01-01T12:00:00Z',
             'size': '1000'
         }
-        mock_drive_backend.drive_sync.list_files.return_value = [mock_file]
+        mock_drive_backend.drive_sync.list_files_by_name.return_value = [mock_file]
         
         last_metadata = {
             "modified_time": "2025-01-01T12:00:00Z",
@@ -102,7 +102,7 @@ class TestGoogleDriveChangeDetection:
             'modifiedTime': '2025-01-02T12:00:00Z',  # Different time
             'size': '1000'
         }
-        mock_drive_backend.drive_sync.list_files.return_value = [mock_file]
+        mock_drive_backend.drive_sync.list_files_by_name.return_value = [mock_file]
         
         last_metadata = {
             "modified_time": "2025-01-01T12:00:00Z",  # Original time
@@ -123,7 +123,7 @@ class TestGoogleDriveChangeDetection:
             'modifiedTime': '2025-01-01T12:00:00Z',
             'size': '2000'  # Different size
         }
-        mock_drive_backend.drive_sync.list_files.return_value = [mock_file]
+        mock_drive_backend.drive_sync.list_files_by_name.return_value = [mock_file]
         
         last_metadata = {
             "modified_time": "2025-01-01T12:00:00Z",
@@ -151,7 +151,7 @@ class TestGoogleDriveChangeDetection:
                 'size': '1500'
             }
         ]
-        mock_drive_backend.drive_sync.list_files.return_value = mock_files
+        mock_drive_backend.drive_sync.list_files_by_name.return_value = mock_files
         
         has_changed, metadata = mock_drive_backend.has_database_changed()
         
@@ -162,7 +162,7 @@ class TestGoogleDriveChangeDetection:
     def test_api_error_triggers_conservative_download(self, mock_drive_backend):
         """Test that API errors trigger conservative download"""
         # Mock API error
-        mock_drive_backend.drive_sync.list_files.side_effect = Exception("API Error")
+        mock_drive_backend.drive_sync.list_files_by_name.side_effect = Exception("API Error")
         
         has_changed, metadata = mock_drive_backend.has_database_changed()
         

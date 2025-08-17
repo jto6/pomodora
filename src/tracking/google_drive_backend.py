@@ -360,11 +360,8 @@ class GoogleDriveBackend(CoordinationBackend):
         Conservative approach - returns True if uncertain.
         """
         try:
-            # Find database files
-            db_files = self.drive_sync.list_files(
-                folder_id=self.folder_id,
-                name_pattern="*.db"
-            )
+            # Find database files by name (pomodora.db)
+            db_files = self.drive_sync.list_files_by_name("pomodora.db")
             
             if not db_files:
                 debug_print("No remote database found - considering as changed")

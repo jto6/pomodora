@@ -451,16 +451,26 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         return self.sync_manager.is_sync_needed()
     
     def sync_if_changes_pending(self):
-        """Sync only if there are pending local changes"""
+        """Sync if there are pending local changes OR remote database has changed"""
         if not self.sync_manager:
             debug_print("No sync manager - skipping sync")
             return True
-            
-        if not self.has_pending_changes():
-            debug_print("No pending changes - skipping sync")
+        
+        # Check for local pending changes
+        has_local_changes = self.has_pending_changes()
+        
+        # Check if remote database has changed (with efficient change detection)
+        has_remote_changes = self.sync_manager.is_sync_needed()
+        
+        if not has_local_changes and not has_remote_changes:
+            debug_print("No local or remote changes - skipping sync")
             return True
             
-        debug_print("Pending changes found - starting sync...")
+        if has_local_changes:
+            debug_print("Local changes found - starting sync...")
+        if has_remote_changes:
+            debug_print("Remote changes detected - starting sync...")
+            
         return self.sync_manager.sync_database()
     
     def sync_with_progress(self, parent_widget=None) -> bool:
