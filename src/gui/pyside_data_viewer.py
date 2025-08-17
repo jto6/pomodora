@@ -7,6 +7,8 @@ from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QFont
 from datetime import datetime, timedelta, date
 import calendar
+import tempfile
+import os
 
 class PySideDataViewerWindow(QWidget):
     """Modern PySide6 data viewer for Pomodoro sprints"""
@@ -17,6 +19,7 @@ class PySideDataViewerWindow(QWidget):
         self.db_manager = db_manager
         self.current_filter = "day"
         self.current_date = date.today()
+        self.chart_images = []  # Track temporary chart image files
 
         self.init_ui()
         self.apply_styling()
@@ -734,6 +737,7 @@ class PySideDataViewerWindow(QWidget):
 
         total_time = 0
         projects = {}
+        categories = {}
 
         for sprint in sprints:
             if sprint.end_time and sprint.start_time:
@@ -744,6 +748,11 @@ class PySideDataViewerWindow(QWidget):
             if project not in projects:
                 projects[project] = 0
             projects[project] += 1
+            
+            category = sprint.task_category_name
+            if category not in categories:
+                categories[category] = 0
+            categories[category] += 1
 
         # Calculate completion rate
         completion_rate = (completed_sprints / total_sprints * 100) if total_sprints > 0 else 0
@@ -780,10 +789,167 @@ class PySideDataViewerWindow(QWidget):
 
         summary_text += "</ul>"
 
+        # Add project pie chart right after project breakdown
+        if projects and len(projects) > 1:
+            # Clean up any previous chart images
+            self.cleanup_chart_images()
+            project_chart_path = self.create_pie_chart(projects, "Projects Distribution", total_sprints)
+            if project_chart_path:
+                summary_text += f"""
+<p style="text-align: center; margin: 20px 0;">
+<img src="file://{project_chart_path}" alt="Projects Pie Chart" style="max-width: 450px; height: auto; border-radius: 8px;">
+</p>
+"""
+
+        summary_text += f"""
+
+<h3>🏷️ Task Categories Breakdown</h3>
+<ul>
+"""
+
+        if categories:
+            for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_sprints * 100) if total_sprints > 0 else 0
+                summary_text += f"<li><b>{category}:</b> {count} sprints ({percentage:.1f}%)</li>\n"
+        else:
+            summary_text += "<li><i>No task categories found</i></li>\n"
+
+        summary_text += "</ul>"
+
+        # Add category pie chart right after category breakdown
+        if categories and len(categories) > 1:
+            category_chart_path = self.create_pie_chart(categories, "Task Categories Distribution", total_sprints)
+            if category_chart_path:
+                summary_text += f"""
+<p style="text-align: center; margin: 20px 0;">
+<img src="file://{category_chart_path}" alt="Categories Pie Chart" style="max-width: 450px; height: auto; border-radius: 8px;">
+</p>
+"""
+
         if total_sprints == 0:
             summary_text += "\n<p><i>No sprints found for this period.</i></p>"
 
         self.summary_label.setText(summary_text)
+
+
+    def create_pie_chart(self, data_dict, title, total):
+        """Create a graphical pie chart using matplotlib with theme support"""
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib
+            matplotlib.use('Agg')  # Use non-interactive backend
+            
+            if not data_dict or total == 0:
+                return None
+                
+            # Detect current theme
+            is_dark_theme = self.get_current_theme() == "dark"
+            
+            # Sort by count (descending)
+            sorted_data = sorted(data_dict.items(), key=lambda x: x[1], reverse=True)
+            
+            # Prepare data
+            labels = []
+            sizes = []
+            colors = []
+            
+            # Define theme-appropriate color palettes
+            if is_dark_theme:
+                # Brighter, more saturated colors for dark theme
+                color_palette = [
+                    '#FF7B7B', '#5EDCE4', '#55C7E1', '#A6DEB4', '#FFFA87', 
+                    '#EDA0DD', '#A8E8D8', '#F7EC6F', '#CB9FCE', '#95D1F9'
+                ]
+                bg_color = '#2b2b2b'
+                text_color = '#ffffff'
+                title_color = '#ffffff'
+            else:
+                # Standard colors for light theme
+                color_palette = [
+                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
+                    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+                ]
+                bg_color = '#ffffff'
+                text_color = '#000000'
+                title_color = '#000000'
+            
+            for i, (name, count) in enumerate(sorted_data):
+                percentage = (count / total) * 100
+                labels.append(f'{name}\n({count} sprints, {percentage:.1f}%)')
+                sizes.append(count)
+                colors.append(color_palette[i % len(color_palette)])
+            
+            # Create figure and pie chart with larger size
+            fig, ax = plt.subplots(figsize=(10, 10))
+            fig.patch.set_facecolor(bg_color)
+            
+            # Create pie chart
+            wedges, texts, autotexts = ax.pie(
+                sizes, 
+                labels=labels,
+                colors=colors,
+                autopct='%1.1f%%',
+                startangle=90,
+                explode=[0.08] * len(sizes),  # Slightly more separation for clarity
+                textprops={'fontsize': 12, 'fontweight': 'bold', 'color': text_color}  # Larger text
+            )
+            
+            # Customize appearance with larger fonts
+            ax.set_title(title, fontsize=20, fontweight='bold', pad=30, color=title_color)
+            
+            # Make percentage text more readable and larger
+            for autotext in autotexts:
+                autotext.set_color('white')
+                autotext.set_fontweight('bold')
+                autotext.set_fontsize(14)  # Larger percentage text
+                autotext.set_bbox(dict(boxstyle="round,pad=0.3", facecolor='black', alpha=0.7))
+            
+            # Make label text larger and more readable
+            for text in texts:
+                text.set_fontsize(12)  # Larger label text
+                text.set_fontweight('bold')
+                text.set_color(text_color)
+            
+            # Equal aspect ratio ensures that pie is drawn as a circle
+            ax.axis('equal')
+            ax.set_facecolor(bg_color)
+            
+            # Save to temporary file
+            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+            
+            # Save the chart with theme-appropriate background
+            plt.tight_layout()
+            plt.savefig(temp_path, dpi=200, bbox_inches='tight', 
+                       facecolor=bg_color, edgecolor='none')
+            plt.close(fig)
+            
+            # Track the file for cleanup
+            self.chart_images.append(temp_path)
+            
+            return temp_path
+            
+        except ImportError:
+            return None
+        except Exception as e:
+            print(f"Error creating pie chart: {e}")
+            return None
+
+    def cleanup_chart_images(self):
+        """Clean up temporary chart image files"""
+        for image_path in self.chart_images:
+            try:
+                if os.path.exists(image_path):
+                    os.unlink(image_path)
+            except Exception:
+                pass
+        self.chart_images = []
+
+    def closeEvent(self, event):
+        """Clean up when window is closed"""
+        self.cleanup_chart_images()
+        super().closeEvent(event)
 
     def update_stats_label(self, sprints):
         """Update the stats label in the header"""
