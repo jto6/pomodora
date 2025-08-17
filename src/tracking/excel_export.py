@@ -4,11 +4,12 @@ from openpyxl.styles.numbers import FORMAT_GENERAL
 from datetime import datetime, timedelta
 import calendar
 from sqlalchemy import and_
-from .models import DatabaseManager, Sprint, Project
+from .database_manager_unified import UnifiedDatabaseManager
+from .models import Sprint, Project
 from utils.progress_wrapper import with_progress, ProgressCapableMixin
 
 class ExcelExporter(ProgressCapableMixin):
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self, db_manager: UnifiedDatabaseManager):
         self.db_manager = db_manager
 
         # Define colors
