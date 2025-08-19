@@ -419,10 +419,32 @@ class LeaderElectionSyncManager:
             debug_print(f"Error saving sync metadata: {e}")
     
     def is_sync_needed(self) -> bool:
-        """Check if sync is needed based on pending operations"""
+        """Check if sync is needed based on pending operations OR remote database changes"""
         try:
+            # Check local pending operations
             pending_operations = self.operation_tracker.get_pending_operations()
-            return len(pending_operations) > 0
+            has_local_changes = len(pending_operations) > 0
+            
+            # Check remote database changes with detailed metadata comparison
+            last_metadata = self._load_last_sync_metadata()
+            has_remote_changes, current_metadata = self.coordination.has_database_changed(last_metadata)
+            
+            # Enhanced debug output for troubleshooting
+            debug_print(f"Sync needed check:")
+            debug_print(f"  Local pending operations: {len(pending_operations)}")
+            if last_metadata:
+                debug_print(f"  Last sync metadata: {last_metadata}")
+            else:
+                debug_print(f"  Last sync metadata: None (never synced)")
+            if current_metadata:
+                debug_print(f"  Current remote metadata: {current_metadata}")
+            else:
+                debug_print(f"  Current remote metadata: None (unavailable)")
+            debug_print(f"  Has local changes: {has_local_changes}")
+            debug_print(f"  Has remote changes: {has_remote_changes}")
+            debug_print(f"  Sync needed: {has_local_changes or has_remote_changes}")
+            
+            return has_local_changes or has_remote_changes
         except Exception as e:
             debug_print(f"Error checking sync needed: {e}")
             return False

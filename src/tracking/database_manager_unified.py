@@ -464,21 +464,14 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             debug_print("No sync manager - skipping sync")
             return True
         
-        # Check for local changes (pending operations)
-        has_local_changes = self.has_local_changes()
+        # Use the enhanced sync check that provides detailed metadata comparison
+        sync_needed = self.sync_manager.is_sync_needed()
         
-        # Check for remote changes (database modified by other workstations)
-        has_remote_changes = self.has_remote_changes()
-        
-        if not has_local_changes and not has_remote_changes:
+        if not sync_needed:
             debug_print("No local or remote changes - skipping sync")
             return True
             
-        if has_local_changes:
-            debug_print("Local changes found - starting sync...")
-        if has_remote_changes:
-            debug_print("Remote changes detected - starting sync...")
-            
+        debug_print("Changes detected - starting sync...")
         return self.sync_manager.sync_database()
     
     def sync_with_progress(self, parent_widget=None) -> bool:
