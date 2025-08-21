@@ -714,6 +714,40 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         finally:
             session.close()
 
+    def delete_sprint(self, sprint_id):
+        """Delete a sprint by ID"""
+        session = self.get_session()
+        try:
+            sprint = session.query(Sprint).filter(Sprint.id == sprint_id).first()
+            if not sprint:
+                return False, "Sprint not found"
+
+            # Capture sprint data for operation tracking
+            sprint_data = {
+                'id': sprint_id,
+                'project_id': sprint.project_id,
+                'task_category_id': sprint.task_category_id,
+                'task_description': sprint.task_description,
+                'start_time': sprint.start_time.isoformat() if sprint.start_time else None,
+                'planned_duration': sprint.planned_duration
+            }
+            
+            session.delete(sprint)
+            session.commit()
+            
+            # Track operation for sync
+            self.operation_tracker.track_operation('delete', 'sprints', sprint_data)
+            
+            debug_print(f"Deleted sprint: {sprint.task_description} (ID: {sprint_id})")
+            return True, f"Sprint '{sprint.task_description}' deleted successfully"
+            
+        except Exception as e:
+            session.rollback()
+            error_print(f"Failed to delete sprint: {e}")
+            return False, f"Failed to delete sprint: {e}"
+        finally:
+            session.close()
+
     def create_task_category(self, name, color):
         """Create a new task category"""
         session = self.get_session()
