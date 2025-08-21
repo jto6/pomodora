@@ -1106,7 +1106,7 @@ class ModernPomodoroWindow(QMainWindow):
         self.qt_timer.stop()
         self.reset_ui()
         self.state_label.setText("Sprint Completed! 🎉")
-        self.update_stats()
+        self.refresh_data_dependent_ui()
         
         # Clear preserved sprint start time after successful completion
         self.sprint_start_time = None
@@ -1155,14 +1155,14 @@ class ModernPomodoroWindow(QMainWindow):
                 today_sprints = self.db_manager.get_sprints_by_date(date.today())
                 debug_print(f"Verification: {len(today_sprints)} sprints now in database for today")
 
-                # Update auto-completion with the new task description
-                self.update_task_autocompletion()
+                # Refresh UI to include the new task description
+                self.refresh_data_dependent_ui()
 
             self.pomodoro_timer.stop()
             self.qt_timer.stop()
             self.reset_ui()
             self.state_label.setText("Sprint Completed! 🎉")
-            self.update_stats()
+            self.refresh_data_dependent_ui()
             
             # Clear preserved sprint start time after successful completion
             self.sprint_start_time = None
@@ -1237,6 +1237,8 @@ class ModernPomodoroWindow(QMainWindow):
     def start_periodic_sync_system(self):
         """Initialize the periodic sync system after startup sync"""
         debug_print("Starting periodic sync system")
+        # Refresh UI after startup sync in case new data was downloaded
+        self.refresh_data_dependent_ui()
         # Start 1-hour timer after startup sync completes
         self.on_sync_completed()
         # Start idle detection
@@ -1279,8 +1281,8 @@ class ModernPomodoroWindow(QMainWindow):
                 success = self.db_manager.sync_if_changes_pending()
                 if success:
                     debug_print("Periodic sync completed successfully")
-                    # Update stats in case remote changes were downloaded
-                    self.update_stats()
+                    # Refresh UI in case remote changes were downloaded
+                    self.refresh_data_dependent_ui()
                     # Restart periodic timer for next sync
                     self.on_sync_completed()
                 else:
@@ -1536,6 +1538,11 @@ class ModernPomodoroWindow(QMainWindow):
         # Validate form to set proper button state
         self.validate_form()
 
+    def refresh_data_dependent_ui(self):
+        """Refresh all UI elements that depend on database data"""
+        self.update_stats()
+        self.update_task_autocompletion()
+
     def update_stats(self):
         """Update today's statistics"""
         try:
@@ -1722,8 +1729,8 @@ class ModernPomodoroWindow(QMainWindow):
             success = self.db_manager.sync_with_progress(self)
             
             if success:
-                # Update stats to reflect any new sprints downloaded from remote
-                self.update_stats()
+                # Refresh UI to reflect any new data downloaded from remote
+                self.refresh_data_dependent_ui()
                 
                 # Restart periodic timer after manual sync
                 self.on_sync_completed()
