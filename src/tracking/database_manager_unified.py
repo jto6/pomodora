@@ -92,6 +92,9 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
         # Initialize default data if needed
         self._initialize_default_data()
         
+        # Perform scheduled backups on startup
+        self._perform_startup_backups()
+        
         # Perform initial sync if using leader election
         if self.sync_manager:
             self._perform_initial_sync()
@@ -185,6 +188,14 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             self.sync_manager.sync_database(timeout_seconds=120)
         except Exception as e:
             error_print(f"Initial sync failed: {e}")
+    
+    def _perform_startup_backups(self) -> None:
+        """Perform scheduled backups on application startup"""
+        try:
+            info_print("Checking for scheduled backups on startup")
+            self.backup_manager.perform_scheduled_backups()
+        except Exception as e:
+            error_print(f"Startup backup failed: {e}")
     
     def get_session(self):
         """Get a database session"""

@@ -1228,11 +1228,27 @@ class ModernPomodoroWindow(QMainWindow):
             self.current_date = today
             debug_print(f"Date tracker initialized: {today}")
         elif self.current_date != today:
-            # Date has changed - refresh stats
+            # Date has changed - refresh stats and trigger backups
             debug_print(f"Date changed from {self.current_date} to {today} - refreshing stats")
             self.current_date = today
             self.update_stats()
+            
+            # Trigger backups on new day
+            if hasattr(self, 'db_manager') and self.db_manager:
+                self._trigger_daily_backup()
+            
             info_print(f"Stats refreshed for new day: {today}")
+
+    def _trigger_daily_backup(self):
+        """Trigger backups when date changes (new day)"""
+        try:
+            info_print("Triggering daily backup on date change")
+            if hasattr(self.db_manager, 'backup_manager'):
+                self.db_manager.backup_manager.perform_scheduled_backups()
+            else:
+                debug_print("No backup manager available for daily backup")
+        except Exception as e:
+            error_print(f"Daily backup failed: {e}")
 
     def start_periodic_sync_system(self):
         """Initialize the periodic sync system after startup sync"""
