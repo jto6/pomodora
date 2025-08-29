@@ -564,7 +564,14 @@ class GoogleDriveSync:
             return []
 
     def list_files_by_name(self, filename: str) -> list:
-        """List files with exact name match in the configured folder"""
+        """List files with exact name match in the configured folder
+        
+        Returns:
+            list: List of files found, or raises exception on API errors
+            
+        Raises:
+            Exception: When Google Drive API fails (to prevent data loss)
+        """
         try:
             if not self.service or not self.folder_id:
                 return []
@@ -579,7 +586,9 @@ class GoogleDriveSync:
             
         except Exception as e:
             error_print(f"Failed to list files by name '{filename}': {e}")
-            return []
+            # CRITICAL: Re-raise exception instead of returning empty list
+            # This prevents treating API errors as "no files found"
+            raise Exception(f"Google Drive API error during file listing: {e}") from e
 
     def delete_file_by_name(self, filename: str) -> bool:
         """Delete file by name from the configured folder"""
