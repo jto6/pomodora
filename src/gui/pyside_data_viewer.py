@@ -738,6 +738,7 @@ class PySideDataViewerWindow(QWidget):
         total_time = 0
         projects = {}
         categories = {}
+        task_descriptions = {}
 
         for sprint in sprints:
             if sprint.end_time and sprint.start_time:
@@ -753,6 +754,12 @@ class PySideDataViewerWindow(QWidget):
             if category not in categories:
                 categories[category] = 0
             categories[category] += 1
+            
+            # Track task descriptions
+            task_desc = sprint.task_description.strip() if sprint.task_description else "No Description"
+            if task_desc not in task_descriptions:
+                task_descriptions[task_desc] = 0
+            task_descriptions[task_desc] += 1
 
         # Calculate completion rate
         completion_rate = (completed_sprints / total_sprints * 100) if total_sprints > 0 else 0
@@ -823,6 +830,54 @@ class PySideDataViewerWindow(QWidget):
                 summary_text += f"""
 <p style="text-align: center; margin: 20px 0;">
 <img src="file://{category_chart_path}" alt="Categories Pie Chart" style="max-width: 450px; height: auto; border-radius: 8px;">
+</p>
+"""
+
+        # Task Description Analysis - only show if there are frequent task descriptions (>10%)
+        frequent_tasks = {}
+        other_tasks_count = 0
+        
+        if task_descriptions and total_sprints > 0:
+            for task_desc, count in task_descriptions.items():
+                percentage = (count / total_sprints) * 100
+                if percentage > 10.0:
+                    frequent_tasks[task_desc] = count
+                else:
+                    other_tasks_count += count
+        
+        # Only show task description breakdown if there's at least one frequent task
+        if frequent_tasks:
+            summary_text += f"""
+
+<h3>📝 Task Descriptions Breakdown</h3>
+<ul>
+"""
+            
+            # Sort frequent tasks by count (descending)
+            for task_desc, count in sorted(frequent_tasks.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_sprints * 100) if total_sprints > 0 else 0
+                # Truncate long task descriptions for display
+                display_desc = task_desc if len(task_desc) <= 50 else f"{task_desc[:47]}..."
+                summary_text += f"<li><b>{display_desc}:</b> {count} sprints ({percentage:.1f}%)</li>\n"
+            
+            # Add "Other" category if there are remaining tasks
+            if other_tasks_count > 0:
+                other_percentage = (other_tasks_count / total_sprints * 100) if total_sprints > 0 else 0
+                summary_text += f"<li><b>Other:</b> {other_tasks_count} sprints ({other_percentage:.1f}%)</li>\n"
+            
+            summary_text += "</ul>"
+            
+            # Create task description pie chart with "Other" consolidation
+            chart_data = frequent_tasks.copy()
+            if other_tasks_count > 0:
+                chart_data["Other"] = other_tasks_count
+                
+            if len(chart_data) > 1:
+                task_chart_path = self.create_pie_chart(chart_data, "Task Descriptions Distribution", total_sprints)
+                if task_chart_path:
+                    summary_text += f"""
+<p style="text-align: center; margin: 20px 0;">
+<img src="file://{task_chart_path}" alt="Task Descriptions Pie Chart" style="max-width: 450px; height: auto; border-radius: 8px;">
 </p>
 """
 
