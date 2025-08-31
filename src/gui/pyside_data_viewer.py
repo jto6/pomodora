@@ -725,9 +725,9 @@ class PySideDataViewerWindow(QWidget):
         
         # Re-enable sorting and set default chronological order (oldest to newest)
         self.sprint_table.setSortingEnabled(True)
-        # Sort by Time column (1) in ascending order for precise chronological order
+        # Sort by Date column (0) in ascending order for chronological order by date
         # This works because we store timestamp data for proper sorting
-        self.sprint_table.sortItems(1, Qt.SortOrder.AscendingOrder)
+        self.sprint_table.sortItems(0, Qt.SortOrder.AscendingOrder)
 
     def update_summary(self, sprints):
         """Update the summary tab"""
