@@ -281,11 +281,223 @@ A general coding principle to follow is to have a debug logging facility that su
 
 Since my editor flags trailing whitespaces (tab or space), make sure they are removed.
 
-## Testing
+## Testing Architecture
 
-When Claude tries to run the app to debug itself, it should always run with a local database configuration so that Google Drive credentials are not required, and so that the production database isn't compromised.
+### Test Structure and Organization
 
-DO NOT try to run the app directly (eg, python src/main.py) without having a way to pass in options to use a local test database or otherwise avoid requiring Google API credentials.  If you create a test app that will interface with the database, it should access a local test database.
+The test suite follows a hierarchical organization pattern:
+
+```
+tests/
+├── unit/                          # Isolated component tests
+│   ├── gui/                       # GUI component tests
+│   ├── tracking/                  # Database and sync logic tests
+│   ├── timer/                     # Timer functionality tests
+│   └── utils/                     # Utility function tests
+├── integration/                   # Multi-component interaction tests
+├── feature/                       # End-to-end feature tests
+├── concurrency/                   # Multi-threading and sync tests
+├── helpers/                       # Test utilities and fixtures
+│   ├── test_database_manager.py   # Lightweight test database manager
+│   ├── database_helpers.py        # Database setup and teardown utilities
+│   └── unified_sync_simulators.py # Multi-workstation sync simulators
+└── conftest.py                    # pytest configuration and fixtures
+```
+
+### Database Testing Patterns
+
+#### Database Manager Initialization
+```python
+# Standard pattern for tests
+from tracking.database_manager_unified import UnifiedDatabaseManager as DatabaseManager
+
+# For unit tests - simple initialization
+self.db_manager = DatabaseManager(db_path=self.db_path)
+
+# For integration tests with temporary database
+temp_dir = tempfile.TemporaryDirectory()
+db_path = os.path.join(temp_dir.name, "test.db")
+db_manager = DatabaseManager(db_path=db_path)
+```
+
+#### Test Database Setup
+```python
+# Standard test setup pattern
+@pytest.fixture(autouse=True)
+def setup_method(self):
+    # Create temporary database
+    self.temp_dir = tempfile.TemporaryDirectory()
+    self.db_path = os.path.join(self.temp_dir.name, "test.db")
+    self.db_manager = DatabaseManager(db_path=self.db_path)
+    
+    # Create test data
+    self.setup_test_data()
+    
+def teardown_method(self):
+    self.temp_dir.cleanup()
+```
+
+### GUI Testing Patterns
+
+#### Qt Application Setup
+```python
+# Required for any GUI component testing
+@pytest.fixture(autouse=True)
+def setup_method(self):
+    # Create QApplication if it doesn't exist (needed for Qt widgets)
+    if not QApplication.instance():
+        self.app = QApplication([])
+```
+
+#### Mock GUI Components
+```python
+# Pattern for testing GUI components in isolation
+class MockMainWindow(QObject):  # Must inherit from QObject for event filters
+    def __init__(self, db_manager):
+        super().__init__()  # Essential for Qt integration
+        self.db_manager = db_manager
+        self.widget = QLineEdit()  # Or other Qt widget
+        
+        # Install event filters if needed
+        self.widget.installEventFilter(self)
+```
+
+#### Event Filter Testing
+```python
+# Pattern for testing keyboard/mouse event handling
+def test_event_handling(self):
+    # Create mock event
+    mock_event = Mock()
+    mock_event.type.return_value = QEvent.Type.KeyPress
+    mock_event.key.return_value = Qt.Key.Key_Down
+    
+    # Test event processing
+    result = self.window.eventFilter(self.widget, mock_event)
+    assert result is True  # Event consumed
+```
+
+### Test Data Creation Patterns
+
+#### Sprint Test Data
+```python
+def create_test_sprints(self, session, project, category):
+    """Standard pattern for creating chronological test data"""
+    base_time = datetime.now() - timedelta(hours=5)
+    
+    test_sprints = [
+        (base_time + timedelta(hours=4), "Most recent task"),
+        (base_time + timedelta(hours=3), "Middle task"),
+        (base_time + timedelta(hours=2), "Oldest task"),
+    ]
+    
+    for start_time, task_desc in test_sprints:
+        sprint = Sprint(
+            project_id=project.id,
+            task_category_id=category.id,
+            task_description=task_desc,
+            start_time=start_time,
+            end_time=start_time + timedelta(minutes=25),
+            completed=True,
+            duration_minutes=25
+        )
+        session.add(sprint)
+    
+    session.commit()
+```
+
+### Import Path Configuration
+
+```python
+# Standard pattern for all test files
+import sys
+from pathlib import Path
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
+```
+
+### Test Categories and When to Use Each
+
+#### Unit Tests (`tests/unit/`)
+- **Purpose**: Test individual components in isolation
+- **Database**: Temporary SQLite files or in-memory databases
+- **Scope**: Single class or function functionality
+- **Examples**: Database models, timer logic, GUI components
+
+#### Integration Tests (`tests/integration/`)
+- **Purpose**: Test component interactions and workflows
+- **Database**: Temporary file databases with realistic data
+- **Scope**: Multi-component functionality
+- **Examples**: GUI-database integration, sync workflows
+
+#### Feature Tests (`tests/feature/`)
+- **Purpose**: Test complete user-facing features
+- **Database**: Full temporary database with complex scenarios
+- **Scope**: End-to-end feature validation
+- **Examples**: Complete sprint workflows, data export features
+
+#### Concurrency Tests (`tests/concurrency/`)
+- **Purpose**: Test multi-threading and synchronization
+- **Database**: Multiple database instances for sync testing
+- **Scope**: Race conditions, deadlocks, data consistency
+- **Examples**: Multi-workstation sync, leader election
+
+### Common Test Utilities
+
+#### Database Helpers (`tests/helpers/database_helpers.py`)
+```python
+from helpers.database_helpers import (
+    create_empty_db,           # Empty database
+    create_basic_db,           # Database with default categories/projects  
+    create_populated_db,       # Database with sample sprints
+    create_test_project,       # Single project creation
+    create_test_category,      # Single category creation
+    create_test_sprint         # Single sprint creation
+)
+```
+
+#### Test Database Manager (`tests/helpers/test_database_manager.py`)
+```python
+# Lightweight alternative for simple unit tests
+from helpers.test_database_manager import UnitTestDatabaseManager as DatabaseManager
+```
+
+### Running Tests
+
+```bash
+# Full test suite
+source venv/bin/activate
+python -m pytest tests/ -v
+
+# Specific categories
+python -m pytest tests/unit/ -v                    # All unit tests
+python -m pytest tests/unit/gui/ -v                # GUI unit tests
+python -m pytest tests/integration/ -v             # Integration tests
+
+# Specific test files or methods
+python -m pytest tests/unit/gui/test_task_description_history.py -v
+python -m pytest tests/unit/gui/test_task_description_history.py::TestTaskDescriptionHistory::test_basic -v
+```
+
+### Testing Guidelines
+
+1. **Always use temporary databases** - Never test against production data
+2. **Activate virtual environment** - Required for dependencies: `source venv/bin/activate`
+3. **Import path setup** - Always add src to path in test files
+4. **Qt integration** - Create QApplication for any GUI tests
+5. **Database cleanup** - Use `tempfile.TemporaryDirectory()` with proper cleanup
+6. **Realistic test data** - Create chronologically ordered, realistic test scenarios
+7. **Edge case coverage** - Test empty databases, error conditions, boundary cases
+8. **Mock external dependencies** - Don't require Google Drive credentials in tests
+
+### Application Testing Safety
+
+When Claude tries to run the app for debugging:
+
+- **Always use local database configuration** so Google Drive credentials are not required
+- **Never run `python src/main.py` directly** without local database options  
+- **Use test database paths** to avoid compromising production data
+- **Pass `--no-audio` flag** to avoid audio system dependencies during testing
 
 ## Commit Convention
 
