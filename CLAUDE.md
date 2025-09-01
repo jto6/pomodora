@@ -136,6 +136,7 @@ The application uses a modern, configurable sync architecture with two strategie
 - **Compact Mode**: Click-anywhere-to-exit minimal timer view
 - **Activity Classifications**: Independent task categories and projects with flexible assignment
 - **3-Field Sprint Creation**: Project, Task Category, and Task Description for detailed tracking
+- **Task Description History Navigation**: Use Up/Down arrow keys in the task description field to navigate through previously used task descriptions chronologically
 - **Settings Dialog**: Comprehensive configuration with browse buttons and test features
 
 ## Logging Levels

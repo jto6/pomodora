@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QPushButton, QComboBox,
                                QLineEdit, QProgressBar, QFrame, QTextEdit, QMenuBar, QMenu, QCompleter)
-from PySide6.QtCore import QTimer, QTime, Qt, Signal, QStringListModel
+from PySide6.QtCore import QTimer, QTime, Qt, Signal, QStringListModel, QEvent
 from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction, QPixmap, QShortcut, QKeySequence
 from PySide6.QtSvg import QSvgRenderer
 from timer.pomodoro import PomodoroTimer, TimerState
@@ -466,6 +466,9 @@ class ModernPomodoroWindow(QMainWindow):
         # Set up auto-completion for task descriptions
         self.setup_task_autocompletion()
         
+        # Set up task description history navigation
+        self.setup_task_history_navigation()
+        
         task_layout.addWidget(task_label)
         task_layout.addWidget(self.task_input)
         task_layout.addStretch()  # Push everything to the left
@@ -632,6 +635,119 @@ class ModernPomodoroWindow(QMainWindow):
 
         popup.setCurrentIndex(prev_index)
         popup.scrollTo(prev_index)
+
+    def setup_task_history_navigation(self):
+        """Setup task description history navigation with arrow keys"""
+        # Initialize history tracking variables
+        self.task_history = []
+        self.task_history_index = -1  # -1 means no history position selected
+        self.original_text = ""  # Store the original text when starting history navigation
+        
+        # Install event filter to capture key events
+        self.task_input.installEventFilter(self)
+        
+        debug_print("Setup task description history navigation with up/down arrows")
+
+    def get_task_description_history(self, limit=100):
+        """Get chronological task description history for navigation with adjacent duplicates removed"""
+        try:
+            session = self.db_manager.get_session()
+            try:
+                # Get recent sprints ordered by start time (most recent first)
+                recent_sprints = session.query(Sprint.task_description).filter(
+                    Sprint.task_description != None,
+                    Sprint.task_description != ""
+                ).order_by(Sprint.start_time.desc()).limit(limit).all()
+                
+                # Extract task descriptions and remove adjacent duplicates
+                raw_history = [description for (description,) in recent_sprints if description]
+                
+                # Remove adjacent duplicates while preserving chronological order
+                history = []
+                prev_desc = None
+                for desc in raw_history:
+                    if desc != prev_desc:
+                        history.append(desc)
+                        prev_desc = desc
+                
+                debug_print(f"Loaded {len(history)} unique task descriptions for history navigation (removed {len(raw_history) - len(history)} adjacent duplicates)")
+                return history
+            finally:
+                session.close()
+        except Exception as e:
+            error_print(f"Error getting task description history: {e}")
+            return []
+
+    def eventFilter(self, obj, event):
+        """Event filter to handle arrow key navigation in task input field"""
+        if obj is self.task_input and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            
+            # Only handle arrow keys when not in completion mode
+            if hasattr(self, 'task_completer') and self.task_completer and self.task_completer.popup().isVisible():
+                return super().eventFilter(obj, event)
+            
+            if key == Qt.Key.Key_Down:
+                self.navigate_task_history_down()
+                return True  # Consume the event
+            elif key == Qt.Key.Key_Up:
+                self.navigate_task_history_up()
+                return True  # Consume the event
+            elif key in (Qt.Key.Key_Escape, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                # Reset history navigation on escape or enter
+                self.reset_task_history_navigation()
+                return super().eventFilter(obj, event)
+            elif event.text() and event.text().isprintable():
+                # Reset history navigation when user starts typing
+                self.reset_task_history_navigation()
+                return super().eventFilter(obj, event)
+        
+        return super().eventFilter(obj, event)
+
+    def navigate_task_history_down(self):
+        """Navigate down in task history (backwards in time - older tasks)"""
+        # Load history if not already loaded or if we're starting navigation
+        if self.task_history_index == -1:
+            self.task_history = self.get_task_description_history()
+            if not self.task_history:
+                return
+            self.original_text = self.task_input.text()
+            self.task_history_index = 0
+        else:
+            # Move to next item in history (older)
+            if self.task_history_index < len(self.task_history) - 1:
+                self.task_history_index += 1
+            else:
+                # Wrap to beginning or stay at end
+                return
+        
+        # Update the input field
+        if 0 <= self.task_history_index < len(self.task_history):
+            self.task_input.setText(self.task_history[self.task_history_index])
+            debug_print(f"History navigation: set text to '{self.task_history[self.task_history_index]}' (index {self.task_history_index})")
+
+    def navigate_task_history_up(self):
+        """Navigate up in task history (forwards in time - newer tasks)"""
+        if self.task_history_index == -1:
+            # Not in history navigation mode
+            return
+            
+        if self.task_history_index > 0:
+            # Move to previous item in history (newer)
+            self.task_history_index -= 1
+            self.task_input.setText(self.task_history[self.task_history_index])
+            debug_print(f"History navigation: set text to '{self.task_history[self.task_history_index]}' (index {self.task_history_index})")
+        else:
+            # Back to original text
+            self.task_input.setText(self.original_text)
+            self.task_history_index = -1
+            debug_print(f"History navigation: restored original text '{self.original_text}'")
+
+    def reset_task_history_navigation(self):
+        """Reset task description history navigation state"""
+        self.task_history_index = -1
+        self.original_text = ""
+        debug_print("Reset task description history navigation")
 
     def setup_sprint_shortcuts(self):
         """Setup keyboard shortcuts for sprint operations"""
