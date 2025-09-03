@@ -524,14 +524,17 @@ class ModernPomodoroWindow(QMainWindow):
     def setup_task_autocompletion(self):
         """Set up auto-completion for task descriptions based on recent sprints"""
         try:
-            # Get recent unique task descriptions from database
-            recent_descriptions = self.get_recent_task_descriptions()
+            # Get recent unique task descriptions with context from database
+            recent_descriptions, self.task_context = self.get_recent_task_descriptions_with_context()
             
             # Create completer with recent descriptions
             self.task_completer = QCompleter(recent_descriptions, self)
             self.task_completer.setCaseSensitivity(Qt.CaseInsensitive)
             self.task_completer.setFilterMode(Qt.MatchContains)
             self.task_completer.setMaxVisibleItems(10)
+            
+            # Connect completion selection to auto-populate fields
+            self.task_completer.activated.connect(self.on_task_autocomplete_selected)
             
             # Set completer on task input
             self.task_input.setCompleter(self.task_completer)
@@ -542,6 +545,41 @@ class ModernPomodoroWindow(QMainWindow):
             debug_print(f"Set up auto-completion with {len(recent_descriptions)} recent task descriptions")
         except Exception as e:
             error_print(f"Error setting up task auto-completion: {e}")
+
+    def on_task_autocomplete_selected(self, completion_text):
+        """Handle autocomplete selection - auto-populate project and category fields"""
+        try:
+            if not hasattr(self, 'task_context') or not self.task_context:
+                debug_print("No task context available for autocomplete selection")
+                return
+            
+            context = self.task_context.get(completion_text)
+            if not context:
+                debug_print(f"No context found for task: '{completion_text}'")
+                return
+            
+            # Find and select the project in the combo box
+            project_id = context['project_id']
+            for i in range(self.project_combo.count()):
+                item_data = self.project_combo.itemData(i)
+                if item_data == project_id:
+                    self.project_combo.setCurrentIndex(i)
+                    debug_print(f"Auto-populated project ID: {project_id}")
+                    break
+            
+            # Find and select the task category in the combo box
+            category_id = context['task_category_id']
+            for i in range(self.task_category_combo.count()):
+                item_data = self.task_category_combo.itemData(i)
+                if item_data == category_id:
+                    self.task_category_combo.setCurrentIndex(i)
+                    debug_print(f"Auto-populated task category ID: {category_id}")
+                    break
+            
+            info_print(f"Auto-populated fields for task '{completion_text}' with project ID {project_id}, category ID {category_id}")
+            
+        except Exception as e:
+            error_print(f"Error handling autocomplete selection: {e}")
 
     def get_recent_task_descriptions(self, limit=50):
         """Get recent unique task descriptions for auto-completion"""
@@ -572,10 +610,48 @@ class ModernPomodoroWindow(QMainWindow):
             error_print(f"Error getting recent task descriptions: {e}")
             return []
 
+    def get_recent_task_descriptions_with_context(self, limit=50):
+        """Get recent task descriptions with their project and category context"""
+        try:
+            session = self.db_manager.get_session()
+            try:
+                # Get recent sprints with just IDs (no joins needed)
+                recent_sprints = session.query(
+                    Sprint.task_description,
+                    Sprint.project_id,
+                    Sprint.task_category_id
+                ).filter(
+                    Sprint.task_description != None,
+                    Sprint.task_description != ""
+                ).order_by(Sprint.start_time.desc()).limit(limit * 2).all()  # Get extra to filter duplicates
+                
+                # Create context map: task_description -> {project_id, task_category_id}
+                task_context = {}
+                unique_descriptions = []
+                
+                for sprint in recent_sprints:
+                    description = sprint.task_description
+                    if description and description not in task_context:
+                        task_context[description] = {
+                            'project_id': sprint.project_id,
+                            'task_category_id': sprint.task_category_id
+                        }
+                        unique_descriptions.append(description)
+                        if len(unique_descriptions) >= limit:
+                            break
+                
+                debug_print(f"Found {len(unique_descriptions)} unique task descriptions with context")
+                return unique_descriptions, task_context
+            finally:
+                session.close()
+        except Exception as e:
+            error_print(f"Error getting task descriptions with context: {e}")
+            return [], {}
+
     def update_task_autocompletion(self):
         """Update auto-completion list with latest task descriptions"""
         try:
-            recent_descriptions = self.get_recent_task_descriptions()
+            recent_descriptions, self.task_context = self.get_recent_task_descriptions_with_context()
             
             # Update the completer's model
             if hasattr(self, 'task_completer') and self.task_completer:
