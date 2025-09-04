@@ -535,6 +535,8 @@ class ModernPomodoroWindow(QMainWindow):
             
             # Connect completion selection to auto-populate fields
             self.task_completer.activated.connect(self.on_task_autocomplete_selected)
+            # Also connect to highlighted signal as backup (fires on hover/navigation)
+            self.task_completer.highlighted.connect(self.on_task_autocomplete_highlighted)
             
             # Set completer on task input
             self.task_input.setCompleter(self.task_completer)
@@ -549,37 +551,66 @@ class ModernPomodoroWindow(QMainWindow):
     def on_task_autocomplete_selected(self, completion_text):
         """Handle autocomplete selection - auto-populate project and category fields"""
         try:
+            info_print(f"🎯 AUTOCOMPLETE: Selection triggered for task: '{completion_text}'")
+            
             if not hasattr(self, 'task_context') or not self.task_context:
-                debug_print("No task context available for autocomplete selection")
+                error_print("❌ AUTOCOMPLETE: No task context available for autocomplete selection")
                 return
+            
+            info_print(f"📋 AUTOCOMPLETE: Available contexts: {list(self.task_context.keys())}")
             
             context = self.task_context.get(completion_text)
             if not context:
-                debug_print(f"No context found for task: '{completion_text}'")
+                error_print(f"❌ AUTOCOMPLETE: No context found for task: '{completion_text}'")
                 return
+            
+            info_print(f"✅ AUTOCOMPLETE: Found context: {context}")
             
             # Find and select the project in the combo box
             project_id = context['project_id']
+            info_print(f"🔍 AUTOCOMPLETE: Looking for project ID {project_id} in {self.project_combo.count()} items")
+            
+            project_found = False
             for i in range(self.project_combo.count()):
                 item_data = self.project_combo.itemData(i)
+                debug_print(f"  Project combo index {i}: itemData = {item_data}")
                 if item_data == project_id:
                     self.project_combo.setCurrentIndex(i)
-                    debug_print(f"Auto-populated project ID: {project_id}")
+                    info_print(f"✅ AUTOCOMPLETE: Auto-populated project ID: {project_id} at index {i}")
+                    project_found = True
                     break
+            
+            if not project_found:
+                error_print(f"❌ AUTOCOMPLETE: Project ID {project_id} not found in combo box")
             
             # Find and select the task category in the combo box
             category_id = context['task_category_id']
+            info_print(f"🔍 AUTOCOMPLETE: Looking for category ID {category_id} in {self.task_category_combo.count()} items")
+            
+            category_found = False
             for i in range(self.task_category_combo.count()):
                 item_data = self.task_category_combo.itemData(i)
+                debug_print(f"  Category combo index {i}: itemData = {item_data}")
                 if item_data == category_id:
                     self.task_category_combo.setCurrentIndex(i)
-                    debug_print(f"Auto-populated task category ID: {category_id}")
+                    info_print(f"✅ AUTOCOMPLETE: Auto-populated task category ID: {category_id} at index {i}")
+                    category_found = True
                     break
             
-            info_print(f"Auto-populated fields for task '{completion_text}' with project ID {project_id}, category ID {category_id}")
+            if not category_found:
+                error_print(f"❌ AUTOCOMPLETE: Category ID {category_id} not found in combo box")
+            
+            if project_found and category_found:
+                info_print(f"🎉 AUTOCOMPLETE: Successfully auto-populated fields for task '{completion_text}'")
             
         except Exception as e:
-            error_print(f"Error handling autocomplete selection: {e}")
+            error_print(f"❌ AUTOCOMPLETE: Error handling autocomplete selection: {e}")
+
+    def on_task_autocomplete_highlighted(self, completion_text):
+        """Handle autocomplete highlighting - auto-populate fields on hover/navigation"""
+        debug_print(f"🎯 AUTOCOMPLETE: Highlighted task: '{completion_text}'")
+        # For now, just call the same handler - can differentiate behavior later if needed
+        self.on_task_autocomplete_selected(completion_text)
 
     def get_recent_task_descriptions(self, limit=50):
         """Get recent unique task descriptions for auto-completion"""
