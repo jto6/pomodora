@@ -612,6 +612,41 @@ class ModernPomodoroWindow(QMainWindow):
         # For now, just call the same handler - can differentiate behavior later if needed
         self.on_task_autocomplete_selected(completion_text)
 
+    def populate_fields_from_task_context(self, task_description):
+        """Helper method to populate project/category fields from task context"""
+        try:
+            if not hasattr(self, 'task_context') or not self.task_context:
+                debug_print("No task context available for field population")
+                return
+            
+            context = self.task_context.get(task_description)
+            if not context:
+                debug_print(f"No context found for task: '{task_description}'")
+                return
+            
+            # Find and select the project in the combo box
+            project_id = context['project_id']
+            for i in range(self.project_combo.count()):
+                item_data = self.project_combo.itemData(i)
+                if item_data == project_id:
+                    self.project_combo.setCurrentIndex(i)
+                    debug_print(f"🏷️ HISTORY: Auto-populated project ID: {project_id}")
+                    break
+            
+            # Find and select the task category in the combo box
+            category_id = context['task_category_id']
+            for i in range(self.task_category_combo.count()):
+                item_data = self.task_category_combo.itemData(i)
+                if item_data == category_id:
+                    self.task_category_combo.setCurrentIndex(i)
+                    debug_print(f"🏷️ HISTORY: Auto-populated task category ID: {category_id}")
+                    break
+            
+            info_print(f"🏷️ HISTORY: Auto-populated fields for task '{task_description}'")
+            
+        except Exception as e:
+            error_print(f"Error populating fields from task context: {e}")
+
     def get_recent_task_descriptions(self, limit=50):
         """Get recent unique task descriptions for auto-completion"""
         try:
@@ -830,8 +865,11 @@ class ModernPomodoroWindow(QMainWindow):
         
         # Update the input field
         if 0 <= self.task_history_index < len(self.task_history):
-            self.task_input.setText(self.task_history[self.task_history_index])
-            debug_print(f"History navigation: set text to '{self.task_history[self.task_history_index]}' (index {self.task_history_index})")
+            selected_task = self.task_history[self.task_history_index]
+            self.task_input.setText(selected_task)
+            debug_print(f"History navigation: set text to '{selected_task}' (index {self.task_history_index})")
+            # Auto-populate project/category fields from context
+            self.populate_fields_from_task_context(selected_task)
 
     def navigate_task_history_up(self):
         """Navigate up in task history (forwards in time - newer tasks)"""
@@ -842,8 +880,11 @@ class ModernPomodoroWindow(QMainWindow):
         if self.task_history_index > 0:
             # Move to previous item in history (newer)
             self.task_history_index -= 1
-            self.task_input.setText(self.task_history[self.task_history_index])
-            debug_print(f"History navigation: set text to '{self.task_history[self.task_history_index]}' (index {self.task_history_index})")
+            selected_task = self.task_history[self.task_history_index]
+            self.task_input.setText(selected_task)
+            debug_print(f"History navigation: set text to '{selected_task}' (index {self.task_history_index})")
+            # Auto-populate project/category fields from context
+            self.populate_fields_from_task_context(selected_task)
         else:
             # Back to original text
             self.task_input.setText(self.original_text)
