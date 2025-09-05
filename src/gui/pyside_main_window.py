@@ -795,7 +795,7 @@ class ModernPomodoroWindow(QMainWindow):
         try:
             session = self.db_manager.get_session()
             try:
-                # Get recent sprints ordered by start time (most recent first)
+                # Get recent sprints ordered by start time (most recent first) - includes both date and time
                 recent_sprints = session.query(Sprint.task_description).filter(
                     Sprint.task_description != None,
                     Sprint.task_description != ""
