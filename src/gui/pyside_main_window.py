@@ -897,6 +897,22 @@ class ModernPomodoroWindow(QMainWindow):
         self.original_text = ""
         debug_print("Reset task description history navigation")
 
+    def refresh_task_history(self):
+        """Refresh cached task history with latest data from database"""
+        try:
+            # Only refresh if history was previously loaded
+            if hasattr(self, 'task_history') and self.task_history:
+                old_count = len(self.task_history)
+                self.task_history = self.get_task_description_history()
+                new_count = len(self.task_history)
+                debug_print(f"Refreshed task history: {old_count} -> {new_count} items")
+                
+                # If we were in the middle of navigation, reset to avoid index errors
+                if self.task_history_index >= new_count:
+                    self.reset_task_history_navigation()
+        except Exception as e:
+            error_print(f"Error refreshing task history: {e}")
+
     def setup_sprint_shortcuts(self):
         """Setup keyboard shortcuts for sprint operations"""
         # Ctrl+S to start/pause sprint
@@ -1822,6 +1838,7 @@ class ModernPomodoroWindow(QMainWindow):
         """Refresh all UI elements that depend on database data"""
         self.update_stats()
         self.update_task_autocompletion()
+        self.refresh_task_history()
 
     def update_stats(self):
         """Update today's statistics"""
