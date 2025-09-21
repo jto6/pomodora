@@ -881,6 +881,29 @@ class PySideDataViewerWindow(QWidget):
 </p>
 """
 
+        # Add time-based line graphs based on view type
+        if total_sprints > 0:
+            if self.current_filter == "month":
+                # Add weekly sprint count graph for monthly view
+                weekly_chart_path = self.create_weekly_line_chart(sprints)
+                if weekly_chart_path:
+                    summary_text += f"""
+<h3>📈 Sprint Counts by Week</h3>
+<p style="text-align: center; margin: 20px 0;">
+<img src="file://{weekly_chart_path}" alt="Weekly Sprint Counts" style="max-width: 600px; height: auto; border-radius: 8px;">
+</p>
+"""
+            elif self.current_filter == "week":
+                # Add daily sprint count graph for weekly view
+                daily_chart_path = self.create_daily_line_chart(sprints)
+                if daily_chart_path:
+                    summary_text += f"""
+<h3>📈 Sprint Counts by Day</h3>
+<p style="text-align: center; margin: 20px 0;">
+<img src="file://{daily_chart_path}" alt="Daily Sprint Counts" style="max-width: 600px; height: auto; border-radius: 8px;">
+</p>
+"""
+
         if total_sprints == 0:
             summary_text += "\n<p><i>No sprints found for this period.</i></p>"
 
@@ -989,6 +1012,240 @@ class PySideDataViewerWindow(QWidget):
             return None
         except Exception as e:
             print(f"Error creating pie chart: {e}")
+            return None
+
+    def create_weekly_line_chart(self, sprints):
+        """Create a line chart showing sprint counts by week for monthly view"""
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+            import matplotlib
+            matplotlib.use('Agg')  # Use non-interactive backend
+
+            if not sprints:
+                return None
+
+            # Detect current theme
+            is_dark_theme = self.get_current_theme() == "dark"
+
+            # Group sprints by week
+            from collections import defaultdict
+            import calendar
+
+            weekly_counts = defaultdict(int)
+
+            # Get start of month for reference
+            month_start = self.current_date.replace(day=1)
+
+            for sprint in sprints:
+                sprint_date = sprint.start_time.date()
+                # Calculate which week of the month this sprint belongs to
+                week_start = sprint_date - timedelta(days=sprint_date.weekday())
+                weekly_counts[week_start] += 1
+
+            if not weekly_counts:
+                return None
+
+            # Sort weeks and prepare data
+            sorted_weeks = sorted(weekly_counts.keys())
+            week_labels = []
+            counts = []
+
+            for week_start in sorted_weeks:
+                # Format week label as "Week of Mon DD"
+                week_labels.append(week_start.strftime("Week of %b %d"))
+                counts.append(weekly_counts[week_start])
+
+            # Set theme colors
+            if is_dark_theme:
+                bg_color = '#2b2b2b'
+                text_color = '#ffffff'
+                line_color = '#5EDCE4'
+                grid_color = '#4a5568'
+                title_color = '#ffffff'
+            else:
+                bg_color = '#ffffff'
+                text_color = '#000000'
+                line_color = '#4ECDC4'
+                grid_color = '#dee2e6'
+                title_color = '#000000'
+
+            # Create figure
+            fig, ax = plt.subplots(figsize=(12, 6))
+            fig.patch.set_facecolor(bg_color)
+            ax.set_facecolor(bg_color)
+
+            # Create line plot
+            ax.plot(range(len(week_labels)), counts,
+                   color=line_color, linewidth=3, marker='o',
+                   markersize=8, markerfacecolor=line_color,
+                   markeredgecolor='white', markeredgewidth=2)
+
+            # Customize appearance
+            ax.set_xlabel('Week', fontsize=14, fontweight='bold', color=text_color)
+            ax.set_ylabel('Number of Sprints', fontsize=14, fontweight='bold', color=text_color)
+            ax.set_title(f'Sprint Counts by Week - {self.current_date.strftime("%B %Y")}',
+                        fontsize=16, fontweight='bold', pad=20, color=title_color)
+
+            # Set x-axis labels
+            ax.set_xticks(range(len(week_labels)))
+            ax.set_xticklabels(week_labels, rotation=45, ha='right',
+                              fontsize=12, color=text_color)
+
+            # Style y-axis
+            ax.tick_params(axis='y', labelsize=12, colors=text_color)
+
+            # Add grid
+            ax.grid(True, alpha=0.3, color=grid_color)
+
+            # Ensure y-axis starts at 0 and uses integer ticks
+            ax.set_ylim(bottom=0)
+            max_count = max(counts) if counts else 1
+            ax.set_yticks(range(0, max_count + 2))
+
+            # Add value labels on data points
+            for i, count in enumerate(counts):
+                ax.annotate(str(count), (i, count),
+                           textcoords="offset points", xytext=(0,10),
+                           ha='center', fontsize=12, fontweight='bold',
+                           color=text_color,
+                           bbox=dict(boxstyle="round,pad=0.3",
+                                   facecolor=line_color, alpha=0.7))
+
+            # Save to temporary file
+            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+
+            plt.tight_layout()
+            plt.savefig(temp_path, dpi=150, bbox_inches='tight',
+                       facecolor=bg_color, edgecolor='none')
+            plt.close(fig)
+
+            # Track the file for cleanup
+            self.chart_images.append(temp_path)
+
+            return temp_path
+
+        except ImportError:
+            return None
+        except Exception as e:
+            print(f"Error creating weekly line chart: {e}")
+            return None
+
+    def create_daily_line_chart(self, sprints):
+        """Create a line chart showing sprint counts by day for weekly view"""
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+            import matplotlib
+            matplotlib.use('Agg')  # Use non-interactive backend
+
+            if not sprints:
+                return None
+
+            # Detect current theme
+            is_dark_theme = self.get_current_theme() == "dark"
+
+            # Group sprints by day
+            from collections import defaultdict
+
+            daily_counts = defaultdict(int)
+
+            # Get week boundaries
+            days_since_monday = self.current_date.weekday()
+            week_start = self.current_date - timedelta(days=days_since_monday)
+
+            for sprint in sprints:
+                sprint_date = sprint.start_time.date()
+                daily_counts[sprint_date] += 1
+
+            # Create weekday data (Monday through Friday only)
+            week_days = []
+            counts = []
+            day_names = []
+
+            for i in range(5):  # Monday (0) through Friday (4)
+                day = week_start + timedelta(days=i)
+                week_days.append(day)
+                counts.append(daily_counts.get(day, 0))
+                day_names.append(day.strftime("%a %m/%d"))  # e.g., "Mon 12/25"
+
+            # Set theme colors
+            if is_dark_theme:
+                bg_color = '#2b2b2b'
+                text_color = '#ffffff'
+                line_color = '#FF7B7B'
+                grid_color = '#4a5568'
+                title_color = '#ffffff'
+            else:
+                bg_color = '#ffffff'
+                text_color = '#000000'
+                line_color = '#FF6B6B'
+                grid_color = '#dee2e6'
+                title_color = '#000000'
+
+            # Create figure
+            fig, ax = plt.subplots(figsize=(12, 6))
+            fig.patch.set_facecolor(bg_color)
+            ax.set_facecolor(bg_color)
+
+            # Create line plot
+            ax.plot(range(len(day_names)), counts,
+                   color=line_color, linewidth=3, marker='o',
+                   markersize=8, markerfacecolor=line_color,
+                   markeredgecolor='white', markeredgewidth=2)
+
+            # Customize appearance
+            ax.set_xlabel('Day of Week', fontsize=14, fontweight='bold', color=text_color)
+            ax.set_ylabel('Number of Sprints', fontsize=14, fontweight='bold', color=text_color)
+            ax.set_title(f'Sprint Counts by Day - Week of {week_start.strftime("%B %d, %Y")}',
+                        fontsize=16, fontweight='bold', pad=20, color=title_color)
+
+            # Set x-axis labels
+            ax.set_xticks(range(len(day_names)))
+            ax.set_xticklabels(day_names, fontsize=12, color=text_color)
+
+            # Style y-axis
+            ax.tick_params(axis='y', labelsize=12, colors=text_color)
+
+            # Add grid
+            ax.grid(True, alpha=0.3, color=grid_color)
+
+            # Ensure y-axis starts at 0 and uses integer ticks
+            ax.set_ylim(bottom=0)
+            max_count = max(counts) if any(counts) else 1
+            ax.set_yticks(range(0, max_count + 2))
+
+            # Add value labels on data points
+            for i, count in enumerate(counts):
+                if count > 0:  # Only show labels for non-zero values
+                    ax.annotate(str(count), (i, count),
+                               textcoords="offset points", xytext=(0,10),
+                               ha='center', fontsize=12, fontweight='bold',
+                               color=text_color,
+                               bbox=dict(boxstyle="round,pad=0.3",
+                                       facecolor=line_color, alpha=0.7))
+
+            # Save to temporary file
+            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+
+            plt.tight_layout()
+            plt.savefig(temp_path, dpi=150, bbox_inches='tight',
+                       facecolor=bg_color, edgecolor='none')
+            plt.close(fig)
+
+            # Track the file for cleanup
+            self.chart_images.append(temp_path)
+
+            return temp_path
+
+        except ImportError:
+            return None
+        except Exception as e:
+            print(f"Error creating daily line chart: {e}")
             return None
 
     def cleanup_chart_images(self):
