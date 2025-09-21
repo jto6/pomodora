@@ -900,13 +900,13 @@ class ModernPomodoroWindow(QMainWindow):
     def refresh_task_history(self):
         """Refresh cached task history with latest data from database"""
         try:
-            # Only refresh if history was previously loaded
-            if hasattr(self, 'task_history') and self.task_history:
+            # Refresh if history system has been initialized (even if empty)
+            if hasattr(self, 'task_history'):
                 old_count = len(self.task_history)
                 self.task_history = self.get_task_description_history()
                 new_count = len(self.task_history)
                 debug_print(f"Refreshed task history: {old_count} -> {new_count} items")
-                
+
                 # If we were in the middle of navigation, reset to avoid index errors
                 if self.task_history_index >= new_count:
                     self.reset_task_history_navigation()
