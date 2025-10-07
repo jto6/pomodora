@@ -822,54 +822,57 @@ class ModernPomodoroWindow(QMainWindow):
 
     def eventFilter(self, obj, event):
         """Event filter to handle arrow key navigation in task input field"""
-        if obj is self.task_input and event.type() == QEvent.Type.KeyPress:
-            key = event.key()
-            
-            # Only handle arrow keys when not in completion mode
-            if hasattr(self, 'task_completer') and self.task_completer and self.task_completer.popup().isVisible():
-                return super().eventFilter(obj, event)
-            
-            if key == Qt.Key.Key_Down:
-                self.navigate_task_history_down()
-                return True  # Consume the event
-            elif key == Qt.Key.Key_Up:
-                self.navigate_task_history_up()
-                return True  # Consume the event
-            elif key in (Qt.Key.Key_Escape, Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                # Reset history navigation on escape or enter
+        if obj is self.task_input:
+            if event.type() == QEvent.Type.KeyPress:
+                key = event.key()
+
+                # Only handle arrow keys when not in completion mode
+                if hasattr(self, 'task_completer') and self.task_completer and self.task_completer.popup().isVisible():
+                    return super().eventFilter(obj, event)
+
+                if key == Qt.Key.Key_Down:
+                    self.navigate_task_history_down()
+                    return True  # Consume the event
+                elif key == Qt.Key.Key_Up:
+                    self.navigate_task_history_up()
+                    return True  # Consume the event
+                elif key in (Qt.Key.Key_Escape, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    # Reset history navigation on escape or enter
+                    self.reset_task_history_navigation()
+                    return super().eventFilter(obj, event)
+                elif event.text() and event.text().isprintable():
+                    # Reset history navigation when user starts typing
+                    self.reset_task_history_navigation()
+                    return super().eventFilter(obj, event)
+            elif event.type() == QEvent.Type.FocusOut:
+                # Reset history navigation when field loses focus (e.g., clicking Start button)
                 self.reset_task_history_navigation()
-                return super().eventFilter(obj, event)
-            elif event.text() and event.text().isprintable():
-                # Reset history navigation when user starts typing
-                self.reset_task_history_navigation()
-                return super().eventFilter(obj, event)
-        
+
         return super().eventFilter(obj, event)
 
     def navigate_task_history_down(self):
         """Navigate down in task history (backwards in time - older tasks)"""
         # Load history if not already loaded or if we're starting navigation
         if self.task_history_index == -1:
+            # First time entering history navigation - start at most recent (index 0)
             self.task_history = self.get_task_description_history()
             if not self.task_history:
                 return
             self.original_text = self.task_input.text()
             self.task_history_index = 0
+        elif self.task_history_index < len(self.task_history) - 1:
+            # Already in history navigation - move to next older item
+            self.task_history_index += 1
         else:
-            # Move to next item in history (older)
-            if self.task_history_index < len(self.task_history) - 1:
-                self.task_history_index += 1
-            else:
-                # Wrap to beginning or stay at end
-                return
-        
-        # Update the input field
-        if 0 <= self.task_history_index < len(self.task_history):
-            selected_task = self.task_history[self.task_history_index]
-            self.task_input.setText(selected_task)
-            debug_print(f"History navigation: set text to '{selected_task}' (index {self.task_history_index})")
-            # Auto-populate project/category fields from context
-            self.populate_fields_from_task_context(selected_task)
+            # Already at end, don't move further
+            return
+
+        # Update the input field with the selected history item
+        selected_task = self.task_history[self.task_history_index]
+        self.task_input.setText(selected_task)
+        debug_print(f"History navigation: set text to '{selected_task}' (index {self.task_history_index})")
+        # Auto-populate project/category fields from context
+        self.populate_fields_from_task_context(selected_task)
 
     def navigate_task_history_up(self):
         """Navigate up in task history (forwards in time - newer tasks)"""
