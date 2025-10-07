@@ -1248,19 +1248,22 @@ class ModernPomodoroWindow(QMainWindow):
         elif self.pomodoro_timer.state == TimerState.BREAK:
             # During break - complete current sprint first, then start new sprint
             debug_print("Ending break early - completing current sprint and starting new one")
-            
+
             # Save the previous sprint parameters before completing
             prev_project_id = self.current_project_id
             prev_task_category_id = self.current_task_category_id
             prev_task_description = self.current_task_description
-            
+
             # Complete the current sprint first (uses the original sprint parameters)
             self.complete_sprint()
-            
+
             # Now start new sprint with the SAME parameters as the just-completed sprint
             self.current_project_id = prev_project_id
             self.current_task_category_id = prev_task_category_id
             self.current_task_description = prev_task_description
+
+            # Update UI field to show the task description
+            self.task_input.setText(prev_task_description)
 
             debug_print(f"New sprint started with same parameters - Project ID: {self.current_project_id}, Task Category ID: {self.current_task_category_id}, Task: '{self.current_task_description}'")
             self.pomodoro_timer.start_sprint()
