@@ -68,7 +68,7 @@ class PySideDataViewerWindow(QWidget):
         # View type selector
         filter_layout.addWidget(QLabel("View:"))
         self.view_combo = QComboBox()
-        self.view_combo.addItems(["Day", "Week", "Month"])
+        self.view_combo.addItems(["Day", "Week", "Month", "Quarter"])
         self.view_combo.currentTextChanged.connect(self.on_view_changed)
         filter_layout.addWidget(self.view_combo)
 
@@ -189,6 +189,10 @@ class PySideDataViewerWindow(QWidget):
         export_button = QPushButton("📁 Export to Excel")
         export_button.clicked.connect(self.export_current_view)
         button_layout.addWidget(export_button)
+
+        markdown_button = QPushButton("📝 Export to Markdown")
+        markdown_button.clicked.connect(self.export_to_markdown)
+        button_layout.addWidget(markdown_button)
 
         # Delete sprint button
         self.delete_button = QPushButton("🗑️ Delete Selected Sprint")
@@ -575,6 +579,12 @@ class PySideDataViewerWindow(QWidget):
                 self.current_date = self.current_date.replace(year=self.current_date.year - 1, month=12)
             else:
                 self.current_date = self.current_date.replace(month=self.current_date.month - 1)
+        elif self.current_filter == "quarter":
+            # Move to previous month (rolling 3-month window moves by 1 month)
+            if self.current_date.month == 1:
+                self.current_date = self.current_date.replace(year=self.current_date.year - 1, month=12)
+            else:
+                self.current_date = self.current_date.replace(month=self.current_date.month - 1)
 
         self.date_edit.setDate(QDate(self.current_date))
         self.load_data()
@@ -586,6 +596,12 @@ class PySideDataViewerWindow(QWidget):
         elif self.current_filter == "week":
             self.current_date += timedelta(weeks=1)
         elif self.current_filter == "month":
+            if self.current_date.month == 12:
+                self.current_date = self.current_date.replace(year=self.current_date.year + 1, month=1)
+            else:
+                self.current_date = self.current_date.replace(month=self.current_date.month + 1)
+        elif self.current_filter == "quarter":
+            # Move to next month (rolling 3-month window moves by 1 month)
             if self.current_date.month == 12:
                 self.current_date = self.current_date.replace(year=self.current_date.year + 1, month=1)
             else:
@@ -635,6 +651,24 @@ class PySideDataViewerWindow(QWidget):
                 else:
                     next_month = start_date.replace(month=start_date.month + 1)
                 end_date = next_month
+            elif self.current_filter == "quarter":
+                # Rolling 3 months: most recent 3 full months from current_date
+                # Start from 3 months ago (first day of that month)
+                if self.current_date.month > 3:
+                    start_month = self.current_date.month - 3
+                    start_year = self.current_date.year
+                else:
+                    start_month = self.current_date.month - 3 + 12
+                    start_year = self.current_date.year - 1
+
+                start_date = datetime.combine(
+                    self.current_date.replace(year=start_year, month=start_month, day=1),
+                    datetime.min.time()
+                )
+                # End date is the start of current month
+                end_date = datetime.combine(
+                    self.current_date.replace(day=1), datetime.min.time()
+                )
 
             # Eager load related objects to avoid lazy loading issues
             sprints = session.query(Sprint).options(
@@ -833,14 +867,14 @@ class PySideDataViewerWindow(QWidget):
 </p>
 """
 
-        # Task Description Analysis - only show if there are frequent task descriptions (>10%)
+        # Task Description Analysis - only show if there are frequent task descriptions (>7%)
         frequent_tasks = {}
         other_tasks_count = 0
-        
+
         if task_descriptions and total_sprints > 0:
             for task_desc, count in task_descriptions.items():
                 percentage = (count / total_sprints) * 100
-                if percentage > 10.0:
+                if percentage > 7.0:
                     frequent_tasks[task_desc] = count
                 else:
                     other_tasks_count += count
@@ -901,6 +935,16 @@ class PySideDataViewerWindow(QWidget):
 <h3>📈 Sprint Counts by Day</h3>
 <p style="text-align: center; margin: 20px 0;">
 <img src="file://{daily_chart_path}" alt="Daily Sprint Counts" style="max-width: 600px; height: auto; border-radius: 8px;">
+</p>
+"""
+            elif self.current_filter == "quarter":
+                # Add monthly sprint count graph for quarterly view
+                monthly_chart_path = self.create_monthly_line_chart(sprints)
+                if monthly_chart_path:
+                    summary_text += f"""
+<h3>📈 Sprint Counts by Month</h3>
+<p style="text-align: center; margin: 20px 0;">
+<img src="file://{monthly_chart_path}" alt="Monthly Sprint Counts" style="max-width: 600px; height: auto; border-radius: 8px;">
 </p>
 """
 
@@ -1248,6 +1292,140 @@ class PySideDataViewerWindow(QWidget):
             print(f"Error creating daily line chart: {e}")
             return None
 
+    def create_monthly_line_chart(self, sprints):
+        """Create a line chart showing sprint counts by month for quarterly view"""
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+            import matplotlib
+            matplotlib.use('Agg')  # Use non-interactive backend
+
+            if not sprints:
+                return None
+
+            # Detect current theme
+            is_dark_theme = self.get_current_theme() == "dark"
+
+            # Group sprints by month
+            from collections import defaultdict
+            import calendar
+
+            monthly_counts = defaultdict(int)
+
+            # Calculate rolling 3-month boundaries
+            if self.current_date.month > 3:
+                start_month = self.current_date.month - 3
+                start_year = self.current_date.year
+            else:
+                start_month = self.current_date.month - 3 + 12
+                start_year = self.current_date.year - 1
+
+            rolling_start_date = self.current_date.replace(year=start_year, month=start_month, day=1)
+
+            for sprint in sprints:
+                sprint_date = sprint.start_time.date()
+                # Group by first day of month
+                month_start = sprint_date.replace(day=1)
+                monthly_counts[month_start] += 1
+
+            if not monthly_counts:
+                return None
+
+            # Create rolling 3-month data
+            month_labels = []
+            counts = []
+
+            for i in range(3):
+                month_num = start_month + i
+                year = start_year
+                if month_num > 12:
+                    month_num -= 12
+                    year += 1
+
+                month_date = rolling_start_date.replace(year=year, month=month_num, day=1)
+                month_labels.append(month_date.strftime("%b %Y"))  # e.g., "Jan 2024"
+                counts.append(monthly_counts.get(month_date, 0))
+
+            # Set theme colors
+            if is_dark_theme:
+                bg_color = '#2b2b2b'
+                text_color = '#ffffff'
+                line_color = '#A6DEB4'
+                grid_color = '#4a5568'
+                title_color = '#ffffff'
+            else:
+                bg_color = '#ffffff'
+                text_color = '#000000'
+                line_color = '#96CEB4'
+                grid_color = '#dee2e6'
+                title_color = '#000000'
+
+            # Create figure
+            fig, ax = plt.subplots(figsize=(12, 6))
+            fig.patch.set_facecolor(bg_color)
+            ax.set_facecolor(bg_color)
+
+            # Create line plot
+            ax.plot(range(len(month_labels)), counts,
+                   color=line_color, linewidth=3, marker='o',
+                   markersize=8, markerfacecolor=line_color,
+                   markeredgecolor='white', markeredgewidth=2)
+
+            # Customize appearance
+            ax.set_xlabel('Month', fontsize=14, fontweight='bold', color=text_color)
+            ax.set_ylabel('Number of Sprints', fontsize=14, fontweight='bold', color=text_color)
+
+            # Show rolling 3-month period
+            end_month_date = self.current_date.replace(day=1) - timedelta(days=1)  # Last day of previous month
+            ax.set_title(f'Sprint Counts by Month - {rolling_start_date.strftime("%b %Y")} to {end_month_date.strftime("%b %Y")}',
+                        fontsize=16, fontweight='bold', pad=20, color=title_color)
+
+            # Set x-axis labels
+            ax.set_xticks(range(len(month_labels)))
+            ax.set_xticklabels(month_labels, fontsize=12, color=text_color)
+
+            # Style y-axis
+            ax.tick_params(axis='y', labelsize=12, colors=text_color)
+
+            # Add grid
+            ax.grid(True, alpha=0.3, color=grid_color)
+
+            # Ensure y-axis starts at 0 and uses integer ticks
+            ax.set_ylim(bottom=0)
+            max_count = max(counts) if any(counts) else 1
+            ax.set_yticks(range(0, max_count + 2))
+
+            # Add value labels on data points
+            for i, count in enumerate(counts):
+                if count > 0:  # Only show labels for non-zero values
+                    ax.annotate(str(count), (i, count),
+                               textcoords="offset points", xytext=(0,10),
+                               ha='center', fontsize=12, fontweight='bold',
+                               color=text_color,
+                               bbox=dict(boxstyle="round,pad=0.3",
+                                       facecolor=line_color, alpha=0.7))
+
+            # Save to temporary file
+            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+
+            plt.tight_layout()
+            plt.savefig(temp_path, dpi=150, bbox_inches='tight',
+                       facecolor=bg_color, edgecolor='none')
+            plt.close(fig)
+
+            # Track the file for cleanup
+            self.chart_images.append(temp_path)
+
+            return temp_path
+
+        except ImportError:
+            return None
+        except Exception as e:
+            print(f"Error creating monthly line chart: {e}")
+            return None
+
     def cleanup_chart_images(self):
         """Clean up temporary chart image files"""
         for image_path in self.chart_images:
@@ -1353,6 +1531,179 @@ class PySideDataViewerWindow(QWidget):
 
         except ImportError:
             raise Exception("openpyxl library not found. Please install it with: pip install openpyxl")
+
+    def export_to_markdown(self):
+        """Export current view to Markdown"""
+        try:
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Export to Markdown",
+                f"pomodora_{self.current_filter}_{self.current_date.strftime('%Y%m%d')}.md",
+                "Markdown Files (*.md)"
+            )
+
+            if file_path:
+                sprints = self.get_sprints_for_period()
+                self.create_markdown_report(sprints, file_path)
+                QMessageBox.information(self, "Export Complete",
+                                      f"Markdown report exported successfully to:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export markdown:\n{str(e)}")
+
+    def create_markdown_report(self, sprints, file_path):
+        """Create a comprehensive markdown report"""
+        total_sprints = len(sprints)
+        completed_sprints = len([s for s in sprints if s.completed])
+        interrupted_sprints = len([s for s in sprints if s.interrupted])
+
+        total_time = 0
+        projects = {}
+        categories = {}
+        task_descriptions = {}
+
+        for sprint in sprints:
+            if sprint.end_time and sprint.start_time:
+                duration = sprint.end_time - sprint.start_time
+                total_time += duration.total_seconds() / 60
+
+            project = sprint.project_name
+            if project not in projects:
+                projects[project] = 0
+            projects[project] += 1
+
+            category = sprint.task_category_name
+            if category not in categories:
+                categories[category] = 0
+            categories[category] += 1
+
+            # Track task descriptions
+            task_desc = sprint.task_description.strip() if sprint.task_description else "No Description"
+            if task_desc not in task_descriptions:
+                task_descriptions[task_desc] = 0
+            task_descriptions[task_desc] += 1
+
+        # Calculate completion rate
+        completion_rate = (completed_sprints / total_sprints * 100) if total_sprints > 0 else 0
+
+        # Format time
+        hours = int(total_time / 60)
+        minutes = int(total_time % 60)
+
+        # Generate markdown content
+        period_name = self.current_filter.title()
+        period_date = self.current_date.strftime("%Y-%m-%d")
+
+        markdown_content = f"""# Pomodora {period_name} Report - {period_date}
+
+## 📊 Sprint Statistics
+
+- **Total Sprints:** {total_sprints}
+- **Completed:** {completed_sprints} ({completion_rate:.1f}%)
+- **Interrupted:** {interrupted_sprints}
+- **Total Focus Time:** {hours}h {minutes}m
+
+## 📋 Projects Breakdown
+
+| Project | Sprint Count | Percentage |
+|---------|-------------|------------|
+"""
+
+        if projects:
+            for project, count in sorted(projects.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_sprints * 100) if total_sprints > 0 else 0
+                markdown_content += f"| {project} | {count} | {percentage:.1f}% |\n"
+        else:
+            markdown_content += "| *No projects found* | - | - |\n"
+
+        markdown_content += f"""
+## 🏷️ Task Categories Breakdown
+
+| Category | Sprint Count | Percentage |
+|----------|-------------|------------|
+"""
+
+        if categories:
+            for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_sprints * 100) if total_sprints > 0 else 0
+                markdown_content += f"| {category} | {count} | {percentage:.1f}% |\n"
+        else:
+            markdown_content += "| *No task categories found* | - | - |\n"
+
+        # Task Description Analysis - only show if there are frequent task descriptions (>7%)
+        frequent_tasks = {}
+        other_tasks_count = 0
+
+        if task_descriptions and total_sprints > 0:
+            for task_desc, count in task_descriptions.items():
+                percentage = (count / total_sprints) * 100
+                if percentage > 7.0:
+                    frequent_tasks[task_desc] = count
+                else:
+                    other_tasks_count += count
+
+        # Only show task description breakdown if there's at least one frequent task
+        if frequent_tasks:
+            markdown_content += f"""
+## 📝 Task Descriptions Breakdown
+
+| Task Description | Sprint Count | Percentage |
+|------------------|-------------|------------|
+"""
+
+            # Sort frequent tasks by count (descending)
+            for task_desc, count in sorted(frequent_tasks.items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / total_sprints * 100) if total_sprints > 0 else 0
+                # Escape markdown special characters in task descriptions
+                escaped_desc = task_desc.replace("|", "\\|").replace("*", "\\*").replace("_", "\\_")
+                # Truncate long task descriptions for display
+                display_desc = escaped_desc if len(escaped_desc) <= 50 else f"{escaped_desc[:47]}..."
+                markdown_content += f"| {display_desc} | {count} | {percentage:.1f}% |\n"
+
+            # Add "Other" category if there are remaining tasks
+            if other_tasks_count > 0:
+                other_percentage = (other_tasks_count / total_sprints * 100) if total_sprints > 0 else 0
+                markdown_content += f"| Other | {other_tasks_count} | {other_percentage:.1f}% |\n"
+
+        # Add detailed sprint list
+        markdown_content += f"""
+## 📋 Detailed Sprint List
+
+| Date | Time | Project | Category | Task | Duration | Status |
+|------|------|---------|----------|------|----------|--------|
+"""
+
+        if sprints:
+            for sprint in sprints:
+                date_str = sprint.start_time.strftime("%Y-%m-%d")
+                time_str = sprint.start_time.strftime("%H:%M")
+
+                # Escape markdown special characters
+                project_name = sprint.project_name.replace("|", "\\|")
+                category_name = sprint.task_category_name.replace("|", "\\|")
+                task_desc = sprint.task_description.replace("|", "\\|") if sprint.task_description else ""
+
+                if sprint.end_time and sprint.start_time:
+                    duration = sprint.end_time - sprint.start_time
+                    duration_mins = int(duration.total_seconds() / 60)
+                    duration_str = f"{duration_mins} min"
+                else:
+                    duration_str = "N/A"
+
+                status = "✅ Completed" if sprint.completed else ("❌ Interrupted" if sprint.interrupted else "⏸️ Incomplete")
+
+                markdown_content += f"| {date_str} | {time_str} | {project_name} | {category_name} | {task_desc} | {duration_str} | {status} |\n"
+        else:
+            markdown_content += "| *No sprints found for this period* | - | - | - | - | - | - |\n"
+
+        markdown_content += f"""
+---
+
+*Report generated by Pomodora on {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*
+"""
+
+        # Write to file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
 
     def on_sprint_selection_changed(self):
         """Handle sprint table selection changes"""
