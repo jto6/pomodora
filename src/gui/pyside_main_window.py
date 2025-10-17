@@ -795,15 +795,26 @@ class ModernPomodoroWindow(QMainWindow):
         try:
             session = self.db_manager.get_session()
             try:
+                # Force fresh query - expire all cached objects
+                session.expire_all()
+
                 # Get recent sprints ordered by start time (most recent first) - includes both date and time
-                recent_sprints = session.query(Sprint.task_description).filter(
+                # Use datetime() function to ensure proper datetime comparison in SQLite (handles format inconsistencies)
+                from sqlalchemy import func
+                recent_sprints = session.query(Sprint.task_description, Sprint.start_time).filter(
                     Sprint.task_description != None,
                     Sprint.task_description != ""
-                ).order_by(Sprint.start_time.desc()).limit(limit).all()
-                
+                ).order_by(func.datetime(Sprint.start_time).desc()).limit(limit).all()
+
                 # Extract task descriptions and remove adjacent duplicates
-                raw_history = [description for (description,) in recent_sprints if description]
-                
+                raw_history = [description for (description, start_time) in recent_sprints if description]
+
+                # Debug: Show first 10 raw entries with timestamps
+                if recent_sprints:
+                    debug_print(f"Raw history (first 10 with timestamps):")
+                    for i, (desc, start_time) in enumerate(recent_sprints[:10]):
+                        debug_print(f"  [{i}] {start_time}: {desc}")
+
                 # Remove adjacent duplicates while preserving chronological order
                 history = []
                 prev_desc = None
@@ -811,8 +822,11 @@ class ModernPomodoroWindow(QMainWindow):
                     if desc != prev_desc:
                         history.append(desc)
                         prev_desc = desc
-                
+
                 debug_print(f"Loaded {len(history)} unique task descriptions for history navigation (removed {len(raw_history) - len(history)} adjacent duplicates)")
+                # Debug: Show first 5 items in history
+                if history:
+                    debug_print(f"History order (first 5): {history[:5]}")
                 return history
             finally:
                 session.close()
