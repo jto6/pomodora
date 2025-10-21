@@ -45,8 +45,6 @@ class ModernPomodoroWindow(QMainWindow):
         except Exception as e:
             error_print(f"Error checking existing sprints: {e}")
 
-        # Hibernation recovery: auto-complete sprints that were interrupted by system sleep
-        self._recover_hibernated_sprints()
         self.pomodoro_timer = PomodoroTimer()
 
         # Set up timer callbacks using thread-safe signals
@@ -130,6 +128,11 @@ class ModernPomodoroWindow(QMainWindow):
         debug_print("Calling update_stats() on startup")
         self.update_stats()
         debug_print(f"Stats label text after update: '{self.stats_label.text()}'")
+
+        # Hibernation recovery: auto-complete sprints that were interrupted by system sleep
+        # IMPORTANT: Must run AFTER GUI initialization to avoid crashes
+        # Use Qt's event loop to defer execution until after __init__ completes
+        QTimer.singleShot(0, self._recover_hibernated_sprints)
 
         # Start periodic sync system
         self.start_periodic_sync_system()
@@ -552,20 +555,32 @@ class ModernPomodoroWindow(QMainWindow):
         """Handle autocomplete selection - auto-populate project and category fields"""
         try:
             info_print(f"🎯 AUTOCOMPLETE: Selection triggered for task: '{completion_text}'")
-            
+
+            # Defensive check: ensure GUI widgets are initialized
+            # This should NEVER happen - if it does, there's an initialization order bug
+            if not hasattr(self, 'project_combo') or not hasattr(self, 'task_category_combo'):
+                error_print("=" * 80)
+                error_print("❌ CRITICAL: Autocomplete triggered before GUI widgets initialized!")
+                error_print("This indicates an initialization order bug that needs investigation.")
+                error_print("Stack trace will help identify the calling code:")
+                import traceback
+                error_print(traceback.format_stack())
+                error_print("=" * 80)
+                return
+
             if not hasattr(self, 'task_context') or not self.task_context:
                 error_print("❌ AUTOCOMPLETE: No task context available for autocomplete selection")
                 return
-            
+
             info_print(f"📋 AUTOCOMPLETE: Available contexts: {list(self.task_context.keys())}")
-            
+
             context = self.task_context.get(completion_text)
             if not context:
                 error_print(f"❌ AUTOCOMPLETE: No context found for task: '{completion_text}'")
                 return
-            
+
             info_print(f"✅ AUTOCOMPLETE: Found context: {context}")
-            
+
             # Find and select the project in the combo box
             project_id = context['project_id']
             info_print(f"🔍 AUTOCOMPLETE: Looking for project ID {project_id} in {self.project_combo.count()} items")
@@ -615,15 +630,28 @@ class ModernPomodoroWindow(QMainWindow):
     def populate_fields_from_task_context(self, task_description):
         """Helper method to populate project/category fields from task context"""
         try:
+            # Defensive check: ensure GUI widgets are initialized
+            # This should NEVER happen - if it does, there's an initialization order bug
+            if not hasattr(self, 'project_combo') or not hasattr(self, 'task_category_combo'):
+                error_print("=" * 80)
+                error_print("❌ CRITICAL: Field population triggered before GUI widgets initialized!")
+                error_print(f"Task description: '{task_description}'")
+                error_print("This indicates an initialization order bug that needs investigation.")
+                error_print("Stack trace will help identify the calling code:")
+                import traceback
+                error_print(traceback.format_stack())
+                error_print("=" * 80)
+                return
+
             if not hasattr(self, 'task_context') or not self.task_context:
                 debug_print("No task context available for field population")
                 return
-            
+
             context = self.task_context.get(task_description)
             if not context:
                 debug_print(f"No context found for task: '{task_description}'")
                 return
-            
+
             # Find and select the project in the combo box
             project_id = context['project_id']
             for i in range(self.project_combo.count()):
