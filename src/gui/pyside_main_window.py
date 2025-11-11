@@ -704,26 +704,32 @@ class ModernPomodoroWindow(QMainWindow):
             error_print(f"Error getting recent task descriptions: {e}")
             return []
 
-    def get_recent_task_descriptions_with_context(self, limit=50):
-        """Get recent task descriptions with their project and category context"""
+    def get_recent_task_descriptions_with_context(self):
+        """Get all unique task descriptions with their project and category context
+
+        Returns all unique task descriptions ordered by most recent usage, with context
+        for auto-populating project and category fields. No limit is applied since
+        processing all sprints is fast and ensures all tasks are accessible.
+        """
         try:
             session = self.db_manager.get_session()
             try:
-                # Get recent sprints with just IDs (no joins needed)
-                recent_sprints = session.query(
+                # Get ALL sprints with just IDs (no joins needed)
+                all_sprints = session.query(
                     Sprint.task_description,
                     Sprint.project_id,
                     Sprint.task_category_id
                 ).filter(
                     Sprint.task_description != None,
                     Sprint.task_description != ""
-                ).order_by(Sprint.start_time.desc()).limit(limit * 2).all()  # Get extra to filter duplicates
-                
+                ).order_by(Sprint.start_time.desc()).all()
+
                 # Create context map: task_description -> {project_id, task_category_id}
+                # Keep only the most recent occurrence of each task
                 task_context = {}
                 unique_descriptions = []
-                
-                for sprint in recent_sprints:
+
+                for sprint in all_sprints:
                     description = sprint.task_description
                     if description and description not in task_context:
                         task_context[description] = {
@@ -731,9 +737,7 @@ class ModernPomodoroWindow(QMainWindow):
                             'task_category_id': sprint.task_category_id
                         }
                         unique_descriptions.append(description)
-                        if len(unique_descriptions) >= limit:
-                            break
-                
+
                 debug_print(f"Found {len(unique_descriptions)} unique task descriptions with context")
                 return unique_descriptions, task_context
             finally:
@@ -818,40 +822,44 @@ class ModernPomodoroWindow(QMainWindow):
         
         debug_print("Setup task description history navigation with up/down arrows")
 
-    def get_task_description_history(self, limit=100):
-        """Get chronological task description history for navigation with adjacent duplicates removed"""
+    def get_task_description_history(self):
+        """Get chronological task description history for navigation with all duplicates removed
+
+        Returns unique task descriptions ordered by most recent usage, keeping only the first
+        (most recent) occurrence of each task. This allows efficient navigation through your
+        entire task history without seeing the same task multiple times.
+        """
         try:
             session = self.db_manager.get_session()
             try:
                 # Force fresh query - expire all cached objects
                 session.expire_all()
 
-                # Get recent sprints ordered by start time (most recent first) - includes both date and time
+                # Get ALL sprints ordered by start time (most recent first)
+                # No limit - with typical sprint counts (hundreds to low thousands), this is fast
                 # Use datetime() function to ensure proper datetime comparison in SQLite (handles format inconsistencies)
                 from sqlalchemy import func
-                recent_sprints = session.query(Sprint.task_description, Sprint.start_time).filter(
+                all_sprints = session.query(Sprint.task_description, Sprint.start_time).filter(
                     Sprint.task_description != None,
                     Sprint.task_description != ""
-                ).order_by(func.datetime(Sprint.start_time).desc()).limit(limit).all()
-
-                # Extract task descriptions and remove adjacent duplicates
-                raw_history = [description for (description, start_time) in recent_sprints if description]
+                ).order_by(func.datetime(Sprint.start_time).desc()).all()
 
                 # Debug: Show first 10 raw entries with timestamps
-                if recent_sprints:
+                if all_sprints:
                     debug_print(f"Raw history (first 10 with timestamps):")
-                    for i, (desc, start_time) in enumerate(recent_sprints[:10]):
+                    for i, (desc, start_time) in enumerate(all_sprints[:10]):
                         debug_print(f"  [{i}] {start_time}: {desc}")
 
-                # Remove adjacent duplicates while preserving chronological order
+                # Remove ALL duplicates (not just adjacent), keeping only the most recent occurrence
+                # Use a set to track what we've seen, preserving chronological order
                 history = []
-                prev_desc = None
-                for desc in raw_history:
-                    if desc != prev_desc:
+                seen = set()
+                for desc, _ in all_sprints:
+                    if desc and desc not in seen:
                         history.append(desc)
-                        prev_desc = desc
+                        seen.add(desc)
 
-                debug_print(f"Loaded {len(history)} unique task descriptions for history navigation (removed {len(raw_history) - len(history)} adjacent duplicates)")
+                debug_print(f"Loaded {len(history)} unique task descriptions for history navigation (from {len(all_sprints)} total sprints)")
                 # Debug: Show first 5 items in history
                 if history:
                     debug_print(f"History order (first 5): {history[:5]}")
