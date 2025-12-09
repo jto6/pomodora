@@ -719,10 +719,10 @@ class PySideDataViewerWindow(QWidget):
         for row, sprint in enumerate(sprints):
             # Date
             date_item = QTableWidgetItem(sprint.start_time.strftime("%Y-%m-%d"))
-            # Store sprint index in the first column for easy retrieval
-            date_item.setData(Qt.UserRole, row)
-            # Store full timestamp for proper sorting
-            date_item.setData(Qt.UserRole + 1, sprint.start_time.timestamp())
+            # Store full timestamp for proper sorting by date AND time
+            date_item.setData(Qt.UserRole, sprint.start_time.timestamp())
+            # Store sprint index for easy retrieval
+            date_item.setData(Qt.UserRole + 1, row)
             self.sprint_table.setItem(row, 0, date_item)
 
             # Time
@@ -759,9 +759,9 @@ class PySideDataViewerWindow(QWidget):
         
         # Re-enable sorting and set default chronological order (oldest to newest)
         self.sprint_table.setSortingEnabled(True)
-        # Sort by Time column (1) first to get proper time sorting within each date
+        # Sort by Date column (0) to get proper sorting by date first, then time
         # Since we store full timestamp data, this will sort properly by date AND time
-        self.sprint_table.sortItems(1, Qt.SortOrder.AscendingOrder)
+        self.sprint_table.sortItems(0, Qt.SortOrder.AscendingOrder)
 
     def update_summary(self, sprints):
         """Update the summary tab"""
@@ -1718,13 +1718,17 @@ class PySideDataViewerWindow(QWidget):
             QMessageBox.warning(self, "No Selection", "Please select a sprint to delete.")
             return
             
-        # Get the selected sprint
-        row = selected_rows[0].row()
-        if row >= len(self.current_sprints):
+        # Get the selected sprint using the stored sprint index
+        # (not the visual row number, since table may be sorted)
+        visual_row = selected_rows[0].row()
+        date_item = self.sprint_table.item(visual_row, 0)
+        sprint_index = date_item.data(Qt.UserRole + 1)
+
+        if sprint_index >= len(self.current_sprints):
             QMessageBox.warning(self, "Error", "Invalid sprint selection.")
             return
-            
-        sprint = self.current_sprints[row]
+
+        sprint = self.current_sprints[sprint_index]
         
         # Confirm deletion with custom dialog
         confirmation_dialog = QDialog(self)
