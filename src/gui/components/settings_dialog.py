@@ -15,7 +15,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.parent_window = parent
         self.setWindowTitle("Settings")
-        self.setFixedSize(650, 700)
+        self.setFixedSize(650, 800)
 
         # Apply current theme styling to dialog
         if parent:
@@ -37,7 +37,10 @@ class SettingsDialog(QDialog):
         self.current_volume = settings.get("alarm_volume", 0.7)
         self.current_sprint_alarm = settings.get("sprint_alarm", "gentle_chime")
         self.current_break_alarm = settings.get("break_alarm", "urgent_alert")
-        
+        # Work block mode settings
+        self.current_work_block_reminder_alarm = settings.get("work_block_reminder_alarm", "gentle_chime")
+        self.current_work_block_reminder_interval = settings.get("work_block_reminder_interval", 5)
+
         # Get unified sync configuration
         from tracking.sync_config import SyncConfiguration
         self.sync_config = SyncConfiguration()
@@ -62,6 +65,7 @@ class SettingsDialog(QDialog):
         self.create_theme_section(layout)
         self.create_timer_section(layout)
         self.create_alarm_section(layout)
+        self.create_work_block_section(layout)
         self.create_database_section(layout)  # Re-enabled with unified sync config
         self.create_button_section(layout)
 
@@ -178,6 +182,57 @@ class SettingsDialog(QDialog):
         alarm_group_layout.addLayout(break_alarm_layout)
 
         layout.addWidget(alarm_group)
+
+    def create_work_block_section(self, layout):
+        """Create work block mode settings section"""
+        work_block_group = QGroupBox("Work Block Mode")
+        work_block_layout = QVBoxLayout(work_block_group)
+
+        # Description label
+        desc_label = QLabel("When enabled, plays a reminder alarm if you don't start a new sprint after completing one.")
+        desc_label.setWordWrap(True)
+        work_block_layout.addWidget(desc_label)
+
+        # Reminder interval
+        interval_layout = QHBoxLayout()
+        interval_layout.addWidget(QLabel("Reminder Interval (minutes):"))
+        self.work_block_interval_spin = QSpinBox()
+        self.work_block_interval_spin.setRange(1, 30)
+        self.work_block_interval_spin.setValue(self.current_work_block_reminder_interval)
+        interval_layout.addWidget(self.work_block_interval_spin)
+        interval_layout.addStretch()
+        work_block_layout.addLayout(interval_layout)
+
+        # Import available alarms
+        from audio.alarm import get_available_alarms
+        available_alarms = get_available_alarms()
+
+        # Reminder alarm selection
+        reminder_alarm_layout = QHBoxLayout()
+        reminder_alarm_layout.addWidget(QLabel("Reminder Sound:"))
+        self.work_block_alarm_combo = QComboBox()
+        for alarm_key, alarm_info in available_alarms.items():
+            self.work_block_alarm_combo.addItem(alarm_info["name"], alarm_key)
+        # Set current selection
+        reminder_index = self.work_block_alarm_combo.findData(self.current_work_block_reminder_alarm)
+        if reminder_index >= 0:
+            self.work_block_alarm_combo.setCurrentIndex(reminder_index)
+        reminder_alarm_layout.addWidget(self.work_block_alarm_combo)
+
+        # Browse button for custom sound file
+        browse_reminder_btn = QPushButton("Browse...")
+        browse_reminder_btn.clicked.connect(lambda: self.browse_sound_file(self.work_block_alarm_combo))
+        reminder_alarm_layout.addWidget(browse_reminder_btn)
+
+        # Test button for reminder alarm
+        test_reminder_btn = QPushButton("Test")
+        test_reminder_btn.clicked.connect(lambda: self.test_alarm_sound(
+            self.work_block_alarm_combo.currentData(), self.volume_slider.value() / 100.0
+        ))
+        reminder_alarm_layout.addWidget(test_reminder_btn)
+        work_block_layout.addLayout(reminder_alarm_layout)
+
+        layout.addWidget(work_block_group)
 
     def create_database_section(self, layout):
         """Create database configuration section"""
@@ -535,6 +590,8 @@ class SettingsDialog(QDialog):
                 "alarm_volume": self.volume_slider.value() / 100.0,
                 "sprint_alarm": self.sprint_alarm_combo.currentData(),
                 "break_alarm": self.break_alarm_combo.currentData(),
+                "work_block_reminder_alarm": self.work_block_alarm_combo.currentData(),
+                "work_block_reminder_interval": self.work_block_interval_spin.value(),
             })
 
             # Save unified sync configuration
@@ -646,6 +703,8 @@ class SettingsDialog(QDialog):
                     self.sprint_spin.value(),
                     self.break_spin.value()
                 )
+                # Update work block reminder interval (convert minutes to milliseconds)
+                self.parent_window.work_block_reminder_interval = self.work_block_interval_spin.value() * 60 * 1000
                 debug_print(f"[SETTINGS] Applying theme immediately: {theme_mode}")
                 self.parent_window.apply_modern_styling("settings")  # Reapply styling with new theme
                 self.parent_window.reset_ui()  # Update display with new timer duration

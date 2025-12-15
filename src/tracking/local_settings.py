@@ -34,6 +34,10 @@ class LocalSettingsManager:
             'sprint_alarm': 'gentle_chime',  # alarm sound for sprint completion
             'break_alarm': 'urgent_alert',   # alarm sound for break completion
             'auto_compact_mode': True,  # auto-enter compact mode when sprint starts
+            # Work block mode settings
+            'work_block_mode': False,  # reminder mode for back-to-back sprints
+            'work_block_reminder_alarm': 'gentle_chime',  # alarm sound for work block reminder
+            'work_block_reminder_interval': 5,  # minutes between reminders
             'window_position': None, # {'x': int, 'y': int}
             'window_size': None,     # {'width': int, 'height': int}
             'compact_mode': False,   # boolean (runtime state, not persistent)

@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime, timedelta
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                               QHBoxLayout, QLabel, QPushButton, QComboBox,
+                               QHBoxLayout, QLabel, QPushButton, QComboBox, QCheckBox,
                                QLineEdit, QProgressBar, QFrame, QTextEdit, QMenuBar, QMenu, QCompleter)
 from PySide6.QtCore import QTimer, QTime, Qt, Signal, QStringListModel, QEvent
 from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QAction, QPixmap, QShortcut, QKeySequence
@@ -75,7 +75,14 @@ class ModernPomodoroWindow(QMainWindow):
         self.idle_timer.setSingleShot(True)  # Only trigger once per idle period
         self.idle_timer.timeout.connect(self.on_idle_timeout)
         self.idle_timeout = 10 * 60 * 1000  # 10 minutes in milliseconds
-        
+
+        # Work block reminder timer - reminds user to start a new sprint
+        self.work_block_reminder_timer = QTimer()
+        self.work_block_reminder_timer.setSingleShot(True)  # Single-shot, manually restarted
+        self.work_block_reminder_timer.timeout.connect(self.on_work_block_reminder)
+        self.work_block_mode = False  # Whether work block mode is enabled
+        self.work_block_reminder_interval = 5 * 60 * 1000  # 5 minutes default (in ms)
+
         # Sync state
         self.sync_requested = False  # True when periodic sync is waiting for idle period
 
@@ -202,6 +209,9 @@ class ModernPomodoroWindow(QMainWindow):
             if hasattr(self, 'idle_timer') and self.idle_timer:
                 self.idle_timer.stop()
                 info_print("Idle timer stopped")
+            if hasattr(self, 'work_block_reminder_timer') and self.work_block_reminder_timer:
+                self.work_block_reminder_timer.stop()
+                info_print("Work block reminder timer stopped")
 
             # Stop pomodoro timer
             if hasattr(self, 'pomodoro_timer') and self.pomodoro_timer:
@@ -485,8 +495,12 @@ class ModernPomodoroWindow(QMainWindow):
         """Create control buttons section"""
         control_frame = QFrame()
         control_frame.setObjectName("controlFrame")
-        control_layout = QHBoxLayout(control_frame)
-        control_layout.setSpacing(15)
+        control_frame_layout = QVBoxLayout(control_frame)
+        control_frame_layout.setSpacing(10)
+
+        # Buttons row
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(15)
 
         # Start/Pause button
         self.start_button = QPushButton("Start Sprint")
@@ -505,9 +519,19 @@ class ModernPomodoroWindow(QMainWindow):
         self.complete_button.clicked.connect(self.complete_sprint)
         self.complete_button.setEnabled(False)
 
-        control_layout.addWidget(self.start_button)
-        control_layout.addWidget(self.stop_button)
-        control_layout.addWidget(self.complete_button)
+        buttons_layout.addWidget(self.start_button)
+        buttons_layout.addWidget(self.stop_button)
+        buttons_layout.addWidget(self.complete_button)
+        control_frame_layout.addLayout(buttons_layout)
+
+        # Work block mode toggle (below buttons)
+        self.work_block_checkbox = QCheckBox("Work Block Mode")
+        self.work_block_checkbox.setObjectName("workBlockCheckbox")
+        self.work_block_checkbox.setToolTip("Remind me to start a new sprint after each one completes")
+        self.work_block_checkbox.setChecked(False)  # Will be set in load_settings
+        self.work_block_checkbox.stateChanged.connect(self.toggle_work_block_mode)
+        control_frame_layout.addWidget(self.work_block_checkbox, alignment=Qt.AlignCenter)
+
         layout.addWidget(control_frame)
 
     def create_status_section(self, layout):
@@ -1064,6 +1088,13 @@ class ModernPomodoroWindow(QMainWindow):
         self.auto_compact_mode = settings.get("auto_compact_mode", True)
         # Note: compact_mode is not loaded from settings - app always starts in normal mode
 
+        # Load work block mode settings
+        self.work_block_mode = settings.get("work_block_mode", False)
+        self.work_block_reminder_interval = settings.get("work_block_reminder_interval", 5) * 60 * 1000  # minutes to ms
+        # Update checkbox if it exists (may not exist during early initialization)
+        if hasattr(self, 'work_block_checkbox'):
+            self.work_block_checkbox.setChecked(self.work_block_mode)
+
     def apply_modern_styling(self, context="startup"):
         """Apply modern, colorful styling based on current mode"""
         self.theme_manager.apply_styling(context)
@@ -1249,10 +1280,17 @@ class ModernPomodoroWindow(QMainWindow):
             if not task_description:
                 debug_print("Cannot start sprint: Task description is required")
                 return
-            
+
+            # Stop work block reminder if active (user started new sprint)
+            self.stop_work_block_reminder()
+
+            # Get sprint parameters
+            project_id = self.project_combo.currentData()
+            task_category_id = self.task_category_combo.currentData()
+
             # Start new sprint
-            self.current_project_id = self.project_combo.currentData()
-            self.current_task_category_id = self.task_category_combo.currentData()
+            self.current_project_id = project_id
+            self.current_task_category_id = task_category_id
             self.current_task_description = task_description
 
             self.pomodoro_timer.start_sprint()
@@ -1301,6 +1339,9 @@ class ModernPomodoroWindow(QMainWindow):
         elif self.pomodoro_timer.state == TimerState.BREAK:
             # During break - complete current sprint first, then start new sprint
             debug_print("Ending break early - completing current sprint and starting new one")
+
+            # Stop work block reminder if active
+            self.stop_work_block_reminder()
 
             # Save the previous sprint parameters before completing
             prev_project_id = self.current_project_id
@@ -1447,6 +1488,71 @@ class ModernPomodoroWindow(QMainWindow):
         # Clear preserved sprint start time after successful completion
         self.sprint_start_time = None
         debug_print("Break completed - sprint already saved, UI reset")
+
+        # Start work block reminder timer if work block mode is enabled
+        if self.work_block_mode:
+            self.start_work_block_reminder()
+
+    def toggle_work_block_mode(self, state):
+        """Toggle work block mode on/off"""
+        self.work_block_mode = bool(state)
+        debug_print(f"Work block mode {'enabled' if self.work_block_mode else 'disabled'}")
+
+        # Save the setting
+        from tracking.local_settings import get_local_settings
+        settings = get_local_settings()
+        settings.set("work_block_mode", self.work_block_mode)
+
+        if self.work_block_mode:
+            # If enabling and timer is stopped (after a sprint), start reminder
+            if self.pomodoro_timer.get_state() == TimerState.STOPPED:
+                # Only start reminder if there was a recent sprint (not on fresh app start)
+                if hasattr(self, '_had_recent_sprint') and self._had_recent_sprint:
+                    self.start_work_block_reminder()
+        else:
+            # If disabling, stop any active reminder
+            self.stop_work_block_reminder()
+
+    def start_work_block_reminder(self):
+        """Start the work block reminder timer"""
+        self.work_block_reminder_timer.stop()  # Stop any existing timer
+        self.work_block_reminder_timer.start(self.work_block_reminder_interval)
+        debug_print(f"Work block reminder started: will fire in {self.work_block_reminder_interval / 1000 / 60:.1f} minutes")
+        self._had_recent_sprint = True  # Track that we had a sprint
+
+    def stop_work_block_reminder(self):
+        """Stop the work block reminder timer"""
+        if self.work_block_reminder_timer.isActive():
+            self.work_block_reminder_timer.stop()
+            debug_print("Work block reminder stopped")
+
+    def on_work_block_reminder(self):
+        """Handler for work block reminder timeout - play alarm and restart timer"""
+        debug_print("Work block reminder fired - playing alarm")
+
+        # Play reminder alarm
+        from tracking.local_settings import get_local_settings
+        settings = get_local_settings()
+        volume = settings.get("alarm_volume", 0.7)
+        reminder_alarm = settings.get("work_block_reminder_alarm", "gentle_chime")
+
+        from audio.alarm import play_alarm_sound
+        import threading
+
+        def play_alarm():
+            try:
+                play_alarm_sound(reminder_alarm, volume)
+            except Exception as e:
+                error_print(f"Work block reminder alarm error: {e}")
+
+        # Play in separate thread to avoid blocking UI
+        thread = threading.Thread(target=play_alarm, daemon=True)
+        thread.start()
+
+        # Restart timer for next reminder (only if still in work block mode and timer stopped)
+        if self.work_block_mode and self.pomodoro_timer.get_state() == TimerState.STOPPED:
+            self.work_block_reminder_timer.start(self.work_block_reminder_interval)
+            debug_print(f"Work block reminder restarted: will fire again in {self.work_block_reminder_interval / 1000 / 60:.1f} minutes")
 
     def complete_sprint(self):
         """Complete the current sprint"""

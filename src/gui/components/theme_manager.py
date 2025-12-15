@@ -340,6 +340,29 @@ class ThemeManager:
             background: #e9ecef;
             color: #6c757d;
         }
+
+        QCheckBox {
+            color: #333;
+            spacing: 8px;
+            font-size: 13px;
+        }
+
+        QCheckBox::indicator {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 3px;
+            background: white;
+        }
+
+        QCheckBox::indicator:checked {
+            background: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        QCheckBox::indicator:hover {
+            border-color: #667eea;
+        }
         """
 
         self.main_window.setStyleSheet(style)
@@ -838,6 +861,29 @@ class ThemeManager:
         QPushButton:disabled {
             background: #546e7a;
             color: #95a5a6;
+        }
+
+        QCheckBox {
+            color: #ecf0f1;
+            spacing: 8px;
+            font-size: 13px;
+        }
+
+        QCheckBox::indicator {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #546e7a;
+            border-radius: 3px;
+            background: #455a64;
+        }
+
+        QCheckBox::indicator:checked {
+            background: #5d6d7e;
+            border: 2px solid #5d6d7e;
+        }
+
+        QCheckBox::indicator:hover {
+            border-color: #6c7b8b;
         }
         """
 
