@@ -83,6 +83,10 @@ class ModernPomodoroWindow(QMainWindow):
         self.work_block_mode = False  # Whether work block mode is enabled
         self.work_block_reminder_interval = 5 * 60 * 1000  # 5 minutes default (in ms)
 
+        # Hyperfocus prevention - track consecutive identical sprints
+        self._last_completed_sprint = None  # Dict with project_id, task_category_id, task_description
+        self._consecutive_sprint_count = 0
+
         # Sync state
         self.sync_requested = False  # True when periodic sync is waiting for idle period
 
@@ -1288,6 +1292,9 @@ class ModernPomodoroWindow(QMainWindow):
             project_id = self.project_combo.currentData()
             task_category_id = self.task_category_combo.currentData()
 
+            # Check for hyperfocus (3+ consecutive identical sprints)
+            self._check_hyperfocus_warning(project_id, task_category_id, task_description)
+
             # Start new sprint
             self.current_project_id = project_id
             self.current_task_category_id = task_category_id
@@ -1553,6 +1560,64 @@ class ModernPomodoroWindow(QMainWindow):
         if self.work_block_mode and self.pomodoro_timer.get_state() == TimerState.STOPPED:
             self.work_block_reminder_timer.start(self.work_block_reminder_interval)
             debug_print(f"Work block reminder restarted: will fire again in {self.work_block_reminder_interval / 1000 / 60:.1f} minutes")
+
+    def _update_consecutive_sprint_tracking(self, project_id, task_category_id, task_description):
+        """Update tracking for consecutive identical sprints (hyperfocus prevention)"""
+        current_sprint = {
+            'project_id': project_id,
+            'task_category_id': task_category_id,
+            'task_description': task_description
+        }
+
+        if (self._last_completed_sprint and
+            self._last_completed_sprint['project_id'] == project_id and
+            self._last_completed_sprint['task_category_id'] == task_category_id and
+            self._last_completed_sprint['task_description'] == task_description):
+            # Same sprint repeated
+            self._consecutive_sprint_count += 1
+            debug_print(f"Consecutive sprint count: {self._consecutive_sprint_count}")
+        else:
+            # Different sprint, reset counter
+            self._consecutive_sprint_count = 1
+            debug_print(f"New sprint type, reset consecutive count to 1")
+
+        self._last_completed_sprint = current_sprint
+
+    def _check_hyperfocus_warning(self, project_id, task_category_id, task_description):
+        """Check if hyperfocus warning should be shown before starting a sprint.
+        Returns True if warning was shown and acknowledged, False if no warning needed."""
+        # Check if this would be the 3rd+ consecutive identical sprint
+        if (self._last_completed_sprint and
+            self._consecutive_sprint_count >= 2 and
+            self._last_completed_sprint['project_id'] == project_id and
+            self._last_completed_sprint['task_category_id'] == task_category_id and
+            self._last_completed_sprint['task_description'] == task_description):
+
+            debug_print(f"Hyperfocus warning triggered: {self._consecutive_sprint_count + 1} consecutive sprints")
+            self._show_hyperfocus_warning()
+            return True
+        return False
+
+    def _show_hyperfocus_warning(self):
+        """Show the hyperfocus prevention reminder popup"""
+        from PySide6.QtWidgets import QMessageBox
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Hyperfocus Check")
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("You've been working on the same task for multiple sprints.")
+        msg.setInformativeText(
+            "To continue with this sprint:\n\n"
+            "1. Take a 2 minute walk\n"
+            "2. Ask yourself: \"What would you tell a mentee to do next?\""
+        )
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setDefaultButton(QMessageBox.Ok)
+
+        # Apply current theme styling
+        self.apply_dialog_styling(msg)
+
+        msg.exec()
 
     def complete_sprint(self):
         """Complete the current sprint"""
@@ -1920,6 +1985,13 @@ class ModernPomodoroWindow(QMainWindow):
         self.db_manager.add_sprint(sprint)
         debug_print("Sprint saved to database successfully")
 
+        # Update consecutive sprint tracking for hyperfocus prevention
+        self._update_consecutive_sprint_tracking(
+            self.current_project_id,
+            self.current_task_category_id,
+            task_desc
+        )
+
         # Update statistics
         if hasattr(self, 'update_stats'):
             self.update_stats()
@@ -1965,6 +2037,13 @@ class ModernPomodoroWindow(QMainWindow):
         debug_print("Calling db_manager.add_sprint()...")
         self.db_manager.add_sprint(sprint)
         debug_print("Sprint saved to database successfully with captured data")
+
+        # Update consecutive sprint tracking for hyperfocus prevention
+        self._update_consecutive_sprint_tracking(
+            sprint_data['project_id'],
+            sprint_data['task_category_id'],
+            task_desc
+        )
 
         # Update statistics
         if hasattr(self, 'update_stats'):
