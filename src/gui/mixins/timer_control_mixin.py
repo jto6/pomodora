@@ -35,7 +35,9 @@ class TimerControlMixin:
             task_category_id = self.task_category_combo.currentData()
 
             # Check for hyperfocus (3+ consecutive identical sprints)
-            self._check_hyperfocus_warning(project_id, task_category_id, task_description)
+            if not self._check_hyperfocus_warning(project_id, task_category_id, task_description):
+                debug_print("Sprint cancelled by user from hyperfocus warning")
+                return
 
             # Start new sprint
             self.current_project_id = project_id
@@ -324,7 +326,7 @@ class TimerControlMixin:
 
     def _check_hyperfocus_warning(self, project_id, task_category_id, task_description):
         """Check if hyperfocus warning should be shown before starting a sprint.
-        Returns True if warning was shown and acknowledged, False if no warning needed."""
+        Returns True if sprint should proceed, False if user cancelled."""
         # Check if this would be the 3rd+ consecutive identical sprint
         if (self._last_completed_sprint and
             self._consecutive_sprint_count >= 2 and
@@ -333,28 +335,35 @@ class TimerControlMixin:
             self._last_completed_sprint['task_description'] == task_description):
 
             debug_print(f"Hyperfocus warning triggered: {self._consecutive_sprint_count + 1} consecutive sprints")
-            self._show_hyperfocus_warning()
-            return True
-        return False
+            return self._show_hyperfocus_warning()
+        return True  # No warning needed, proceed with sprint
 
     def _show_hyperfocus_warning(self):
-        """Show the hyperfocus prevention reminder popup"""
+        """Show the hyperfocus prevention reminder popup.
+        Returns True if user chose to continue, False if user cancelled."""
         msg = QMessageBox(self)
         msg.setWindowTitle("Hyperfocus Check")
         msg.setIcon(QMessageBox.Information)
         msg.setText("You've been working on the same task for multiple sprints.")
         msg.setInformativeText(
-            "To continue with this sprint:\n\n"
+            "Consider before continuing:\n\n"
             "1. Take a 2 minute walk\n"
             "2. Ask yourself: \"What would you tell a mentee to do next?\""
         )
-        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         msg.setDefaultButton(QMessageBox.Ok)
+
+        # Change Ok button text to "Continue"
+        ok_button = msg.button(QMessageBox.Ok)
+        ok_button.setText("Continue")
 
         # Apply current theme styling
         self.apply_dialog_styling(msg)
 
-        msg.exec()
+        result = msg.exec()
+
+        # Return True if user clicked Continue (Ok), False if Cancel
+        return result == QMessageBox.Ok
 
     def init_hyperfocus_tracking_from_history(self):
         """Initialize hyperfocus tracking state from database history.
