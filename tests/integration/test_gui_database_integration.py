@@ -112,31 +112,19 @@ class TestGUIDatabaseIntegration:
 
     @patch.dict('os.environ', {'POMODORA_NO_AUDIO': '1'})
     def test_gui_window_initialization_with_database(self):
-        """Test that GUI window can initialize with database manager"""
-        # Skip if PySide6 not available
-        pytest.importorskip("PySide6")
-        
+        """Test that database manager can initialize independently of GUI"""
         from tracking.database_manager_unified import UnifiedDatabaseManager as DatabaseManager
-        
-        # Mock PySide6 to avoid GUI dependencies in tests
-        with patch('PySide6.QtWidgets.QApplication'), \
-             patch('PySide6.QtWidgets.QMainWindow'), \
-             patch('PySide6.QtWidgets.QSystemTrayIcon'), \
-             patch('PySide6.QtGui.QIcon'):
-            
-            with tempfile.TemporaryDirectory() as temp_dir:
-                db_path = os.path.join(temp_dir, "test.db")
-                
-                # Create database manager with test database
-                db_manager = DatabaseManager(db_path=db_path)
-                db_manager.initialize_default_projects()
-                
-                # Mock the GUI window class completely to avoid __init__ patching issues
-                with patch('gui.pyside_main_window.ModernPomodoroWindow'):
-                    # This should be able to import and create the database manager
-                    # without the actual GUI components
-                    assert db_manager is not None
-                    assert hasattr(db_manager, 'sync_strategy')
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = os.path.join(temp_dir, "test.db")
+
+            # Create database manager with test database
+            db_manager = DatabaseManager(db_path=db_path)
+            db_manager.initialize_default_projects()
+
+            # Verify database manager initialized correctly
+            assert db_manager is not None
+            assert hasattr(db_manager, 'sync_strategy')
 
     def test_sync_process_preserves_tables(self):
         """Test that sync process doesn't destroy database tables"""
