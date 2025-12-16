@@ -268,6 +268,60 @@ class ModernPomodoroWindow(
                             progress.setWindowModality(Qt.WindowModal)
                             progress.setMinimumDuration(100)  # Show immediately for exit
                             progress.setCancelButton(None)  # No cancel for exit sync
+
+                            # Apply theme-aware styling
+                            is_dark_mode = hasattr(self, 'theme_mode') and self.theme_mode == 'dark'
+                            if is_dark_mode:
+                                progress.setStyleSheet("""
+                                    QProgressDialog {
+                                        background-color: #2b2b2b;
+                                        color: white;
+                                        border: 1px solid #555555;
+                                    }
+                                    QLabel {
+                                        color: white;
+                                        background-color: transparent;
+                                        padding: 10px;
+                                        font-size: 12px;
+                                    }
+                                    QProgressBar {
+                                        background-color: #404040;
+                                        border: 1px solid #555555;
+                                        border-radius: 4px;
+                                        text-align: center;
+                                        color: white;
+                                    }
+                                    QProgressBar::chunk {
+                                        background-color: #3498db;
+                                        border-radius: 3px;
+                                    }
+                                """)
+                            else:
+                                progress.setStyleSheet("""
+                                    QProgressDialog {
+                                        background-color: white;
+                                        color: black;
+                                        border: 1px solid #cccccc;
+                                    }
+                                    QLabel {
+                                        color: black;
+                                        background-color: transparent;
+                                        padding: 10px;
+                                        font-size: 12px;
+                                    }
+                                    QProgressBar {
+                                        background-color: #e0e0e0;
+                                        border: 1px solid #cccccc;
+                                        border-radius: 4px;
+                                        text-align: center;
+                                        color: black;
+                                    }
+                                    QProgressBar::chunk {
+                                        background-color: #3498db;
+                                        border-radius: 3px;
+                                    }
+                                """)
+
                             progress.show()
                             
                             # Process events to show the dialog
