@@ -454,7 +454,28 @@ class UnifiedDatabaseManager(ProgressCapableMixin):
             return filtered_sprints
         finally:
             session.close()
-    
+
+    def get_recent_completed_sprints(self, limit=10):
+        """Get the most recent completed sprints, ordered by start_time descending.
+
+        Args:
+            limit: Maximum number of sprints to return (default 10)
+
+        Returns:
+            List of Sprint objects, most recent first
+        """
+        session = self.get_session()
+        try:
+            sprints = session.query(Sprint).filter(
+                Sprint.completed == True
+            ).order_by(
+                Sprint.start_time.desc()
+            ).limit(limit).all()
+            debug_print(f"Retrieved {len(sprints)} recent completed sprints")
+            return sprints
+        finally:
+            session.close()
+
     def has_local_changes(self):
         """Check if there are local changes that need to be synced"""
         if not self.sync_manager:

@@ -140,6 +140,7 @@ class ModernPomodoroWindow(
         self.setup_sprint_shortcuts()
         self.create_menu_bar()
         self.load_settings()  # Load settings before applying styling
+        self.init_hyperfocus_tracking_from_history()  # Initialize from DB before UI setup
         self.apply_modern_styling()
         self.load_projects()
         self.load_task_categories()

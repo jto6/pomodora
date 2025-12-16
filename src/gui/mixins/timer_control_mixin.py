@@ -355,3 +355,44 @@ class TimerControlMixin:
         self.apply_dialog_styling(msg)
 
         msg.exec()
+
+    def init_hyperfocus_tracking_from_history(self):
+        """Initialize hyperfocus tracking state from database history.
+
+        This ensures consecutive sprint tracking persists across app restarts
+        by examining recent completed sprints and counting consecutive identical ones.
+        """
+        try:
+            # Get recent completed sprints (most recent first)
+            recent_sprints = self.db_manager.get_recent_completed_sprints(limit=10)
+
+            if not recent_sprints:
+                debug_print("Hyperfocus init: No completed sprints in history")
+                return
+
+            # The most recent sprint becomes our _last_completed_sprint
+            most_recent = recent_sprints[0]
+            self._last_completed_sprint = {
+                'project_id': most_recent.project_id,
+                'task_category_id': most_recent.task_category_id,
+                'task_description': most_recent.task_description
+            }
+
+            # Count consecutive identical sprints from most recent
+            consecutive_count = 1
+            for i in range(1, len(recent_sprints)):
+                sprint = recent_sprints[i]
+                if (sprint.project_id == most_recent.project_id and
+                    sprint.task_category_id == most_recent.task_category_id and
+                    sprint.task_description == most_recent.task_description):
+                    consecutive_count += 1
+                else:
+                    break
+
+            self._consecutive_sprint_count = consecutive_count
+            debug_print(f"Hyperfocus init: last sprint='{most_recent.task_description}', "
+                       f"consecutive count={consecutive_count}")
+
+        except Exception as e:
+            error_print(f"Failed to initialize hyperfocus tracking: {e}")
+            # Keep defaults (None, 0) on error
