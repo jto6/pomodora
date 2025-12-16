@@ -193,11 +193,24 @@ class ModernPomodoroWindow(
             
         return None
 
+    def eventFilter(self, obj, event):
+        """Filter events for child widgets.
+
+        Delegates to mixin event handlers to avoid MRO conflicts with QObject.eventFilter.
+        When using multiple inheritance with Qt classes, mixins cannot directly override
+        eventFilter because QObject.eventFilter is found first in the MRO.
+        """
+        # Handle task input events (arrow key history navigation)
+        if self._handle_task_input_event(obj, event):
+            return True
+
+        return super().eventFilter(obj, event)
+
     def mousePressEvent(self, event):
         """Handle mouse clicks - exit compact mode on any click"""
         if self.compact_mode:
             self.toggle_compact_mode()
-        
+
         # Reset idle timer on user activity
         self.on_user_activity()
         super().mousePressEvent(event)
@@ -498,10 +511,15 @@ class ModernPomodoroWindow(
         
         # Set up auto-completion for task descriptions
         self.setup_task_autocompletion()
-        
+
         # Set up task description history navigation
         self.setup_task_history_navigation()
-        
+
+        # Install event filter for task input (handles arrow key history navigation)
+        # This must be done here in the main window class to avoid MRO conflicts
+        # with QObject.eventFilter when using multiple inheritance with mixins
+        self.task_input.installEventFilter(self)
+
         task_layout.addWidget(task_label)
         task_layout.addWidget(self.task_input)
         task_layout.addStretch()  # Push everything to the left

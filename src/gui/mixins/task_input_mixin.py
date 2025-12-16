@@ -310,8 +310,9 @@ class TaskInputMixin:
         self.task_history_index = -1  # -1 means no history position selected
         self.original_text = ""  # Store the original text when starting history navigation
 
-        # Install event filter to capture key events
-        self.task_input.installEventFilter(self)
+        # Note: Event filter is installed by the main window class, which calls
+        # _handle_task_input_event() for task input events. This avoids MRO conflicts
+        # with QObject.eventFilter when using multiple inheritance.
 
         debug_print("Setup task description history navigation with up/down arrows")
 
@@ -362,15 +363,24 @@ class TaskInputMixin:
             error_print(f"Error getting task description history: {e}")
             return []
 
-    def eventFilter(self, obj, event):
-        """Event filter to handle arrow key navigation in task input field"""
+    def _handle_task_input_event(self, obj, event):
+        """Handle events for task input field (arrow key navigation).
+
+        This method is called by the main window's eventFilter to handle
+        task input specific events. Returns True if the event was handled
+        and should be consumed, False otherwise.
+
+        Note: This is named _handle_task_input_event instead of eventFilter
+        to avoid MRO conflicts with QObject.eventFilter when using multiple
+        inheritance with Qt classes.
+        """
         if obj is self.task_input:
             if event.type() == QEvent.Type.KeyPress:
                 key = event.key()
 
                 # Only handle arrow keys when not in completion mode
                 if hasattr(self, 'task_completer') and self.task_completer and self.task_completer.popup().isVisible():
-                    return super().eventFilter(obj, event)
+                    return False  # Let Qt handle completion navigation
 
                 if key == Qt.Key.Key_Down:
                     self.navigate_task_history_down()
@@ -381,16 +391,16 @@ class TaskInputMixin:
                 elif key in (Qt.Key.Key_Escape, Qt.Key.Key_Return, Qt.Key.Key_Enter):
                     # Reset history navigation on escape or enter
                     self.reset_task_history_navigation()
-                    return super().eventFilter(obj, event)
+                    return False  # Let the event propagate
                 elif event.text() and event.text().isprintable():
                     # Reset history navigation when user starts typing
                     self.reset_task_history_navigation()
-                    return super().eventFilter(obj, event)
+                    return False  # Let the event propagate
             elif event.type() == QEvent.Type.FocusOut:
                 # Reset history navigation when field loses focus (e.g., clicking Start button)
                 self.reset_task_history_navigation()
 
-        return super().eventFilter(obj, event)
+        return False  # Event not handled
 
     def navigate_task_history_down(self):
         """Navigate down in task history (backwards in time - older tasks)"""
