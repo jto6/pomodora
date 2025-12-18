@@ -6,6 +6,7 @@ work block mode, and hyperfocus prevention.
 """
 
 import threading
+from datetime import datetime
 
 from PySide6.QtWidgets import QMessageBox
 
@@ -266,6 +267,7 @@ class TimerControlMixin:
         """Start the work block reminder timer"""
         self.work_block_reminder_timer.stop()  # Stop any existing timer
         self.work_block_reminder_timer.start(self.work_block_reminder_interval)
+        self._work_block_reminder_start_time = datetime.now()  # Track when reminder started
         debug_print(f"Work block reminder started: will fire in {self.work_block_reminder_interval / 1000 / 60:.1f} minutes")
         self._had_recent_sprint = True  # Track that we had a sprint
 
@@ -274,10 +276,11 @@ class TimerControlMixin:
         if self.work_block_reminder_timer.isActive():
             self.work_block_reminder_timer.stop()
             debug_print("Work block reminder stopped")
+        self._work_block_reminder_start_time = None  # Clear the start time
 
     def on_work_block_reminder(self):
-        """Handler for work block reminder timeout - play alarm and restart timer"""
-        debug_print("Work block reminder fired - playing alarm")
+        """Handler for work block reminder timeout - play alarm and show dialog"""
+        debug_print("Work block reminder fired - playing alarm and showing dialog")
 
         # Play reminder alarm
         from tracking.local_settings import get_local_settings
@@ -297,10 +300,41 @@ class TimerControlMixin:
         thread = threading.Thread(target=play_alarm, daemon=True)
         thread.start()
 
+        # Show warning dialog
+        self._show_work_block_reminder_dialog()
+
         # Restart timer for next reminder (only if still in work block mode and timer stopped)
         if self.work_block_mode and self.pomodoro_timer.get_state() == TimerState.STOPPED:
             self.work_block_reminder_timer.start(self.work_block_reminder_interval)
             debug_print(f"Work block reminder restarted: will fire again in {self.work_block_reminder_interval / 1000 / 60:.1f} minutes")
+
+    def _show_work_block_reminder_dialog(self):
+        """Show a dialog reminding the user that work block mode is active but no sprint is running."""
+        # Calculate elapsed time since reminder started
+        elapsed_minutes = 0
+        if hasattr(self, '_work_block_reminder_start_time') and self._work_block_reminder_start_time:
+            elapsed = datetime.now() - self._work_block_reminder_start_time
+            elapsed_minutes = int(elapsed.total_seconds() / 60)
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Work Block Reminder")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Work Block Mode is active but no sprint is running.")
+        msg.setInformativeText(
+            f"No sprint has been active for {elapsed_minutes} minute{'s' if elapsed_minutes != 1 else ''}.\n\n"
+            "Start a new sprint to continue your work block, or disable Work Block Mode."
+        )
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setDefaultButton(QMessageBox.Ok)
+
+        # Change Ok button text to "Dismiss"
+        ok_button = msg.button(QMessageBox.Ok)
+        ok_button.setText("Dismiss")
+
+        # Apply current theme styling
+        self.apply_dialog_styling(msg)
+
+        msg.exec()
 
     def _update_consecutive_sprint_tracking(self, project_id, task_category_id, task_description):
         """Update tracking for consecutive identical sprints (hyperfocus prevention)"""
