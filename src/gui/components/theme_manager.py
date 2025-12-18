@@ -134,8 +134,18 @@ class ThemeManager:
         else:
             self.apply_light_dialog_styling(dialog)
 
+    def _get_checkmark_image_path(self):
+        """Get the path to the checkbox checkmark image"""
+        # Get the directory where this module is located
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        checkmark_path = os.path.join(module_dir, '..', 'resources', 'checkmark_white.png')
+        # Normalize the path and convert to forward slashes for Qt
+        checkmark_path = os.path.normpath(checkmark_path).replace('\\', '/')
+        return checkmark_path
+
     def apply_light_mode_styling(self):
         """Apply light mode styling"""
+        checkmark_path = self._get_checkmark_image_path()
         style = """
         QMainWindow {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -358,17 +368,19 @@ class ThemeManager:
         QCheckBox::indicator:checked {
             background: #667eea;
             border: 2px solid #667eea;
+            image: url("CHECKMARK_PATH");
         }
 
         QCheckBox::indicator:hover {
             border-color: #667eea;
         }
         """
-
+        style = style.replace("CHECKMARK_PATH", checkmark_path)
         self.main_window.setStyleSheet(style)
 
     def apply_light_dialog_styling(self, dialog):
         """Apply light mode styling to a dialog"""
+        checkmark_path = self._get_checkmark_image_path()
         style = """
         QDialog {
             background: #f8f9fa;
@@ -646,17 +658,19 @@ class ThemeManager:
         QCheckBox::indicator:checked {
             background: #667eea;
             border: 2px solid #667eea;
-            color: white;
+            image: url("CHECKMARK_PATH");
         }
 
         QCheckBox::indicator:hover {
             border-color: #667eea;
         }
         """
+        style = style.replace("CHECKMARK_PATH", checkmark_path)
         dialog.setStyleSheet(style)
 
     def apply_dark_mode_styling(self):
         """Apply dark mode styling"""
+        checkmark_path = self._get_checkmark_image_path()
         style = """
         QMainWindow {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -878,19 +892,21 @@ class ThemeManager:
         }
 
         QCheckBox::indicator:checked {
-            background: #5d6d7e;
-            border: 2px solid #5d6d7e;
+            background: #667eea;
+            border: 2px solid #667eea;
+            image: url("CHECKMARK_PATH");
         }
 
         QCheckBox::indicator:hover {
             border-color: #6c7b8b;
         }
         """
-
+        style = style.replace("CHECKMARK_PATH", checkmark_path)
         self.main_window.setStyleSheet(style)
 
     def apply_dark_dialog_styling(self, dialog):
         """Apply dark mode styling to a dialog"""
+        checkmark_path = self._get_checkmark_image_path()
         style = """
         QDialog {
             background: #2c3e50;
@@ -1167,15 +1183,16 @@ class ThemeManager:
         }
 
         QCheckBox::indicator:checked {
-            background: #5d6d7e;
-            border: 2px solid #5d6d7e;
-            color: white;
+            background: #667eea;
+            border: 2px solid #667eea;
+            image: url("CHECKMARK_PATH");
         }
 
         QCheckBox::indicator:hover {
             border-color: #6c7b8b;
         }
         """
+        style = style.replace("CHECKMARK_PATH", checkmark_path)
         dialog.setStyleSheet(style)
 
     def apply_compact_styling(self):
